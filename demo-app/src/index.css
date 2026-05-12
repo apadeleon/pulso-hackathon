@@ -151,7 +151,7 @@ body {
   inset: 0;
   overflow-y: auto;
   background: var(--pg-bg);
-  z-index: 20;
+  z-index: 40;
   animation: pg-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -185,78 +185,21 @@ body {
 }
 
 .pg-detail__body {
-  padding: 16px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-.pg-detail__section-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--pg-text-muted);
-  margin: 0 0 8px;
+@media (min-width: 900px) {
+  .pg-detail__body {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 28px 32px;
+    gap: 24px;
+  }
 }
 
-/* Related markets strip */
-.pg-related {
-  overflow-x: auto;
-  display: flex;
-  gap: 8px;
-  padding-bottom: 4px;
-  scrollbar-width: none;
-}
-
-.pg-related::-webkit-scrollbar { display: none; }
-
-.pg-related-card {
-  flex: 0 0 auto;
-  width: 160px;
-  background: var(--pg-surface);
-  border: 1px solid var(--pg-border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  text-align: left;
-}
-
-.pg-related-card:hover {
-  background: var(--pg-surface-2);
-  border-color: var(--pg-accent);
-}
-
-.pg-related-card__title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--pg-text);
-  line-height: 1.4;
-  margin: 0 0 4px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.pg-related-card__scope {
-  font-size: 10px;
-  color: var(--pg-accent);
-  margin: 0 0 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pg-related-card__reason {
-  font-size: 10px;
-  color: var(--pg-text-muted);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .pg-back-btn {
   background: none;
@@ -318,11 +261,11 @@ body {
 .pg-tooltip__connection {
   font-size: 10px;
   color: var(--pg-text-muted);
-  margin: 0 0 3px;
+  margin: 0 0 5px;
   line-height: 1.4;
   display: flex;
-  gap: 4px;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .pg-tooltip__connection:last-child { margin-bottom: 0; }
@@ -330,24 +273,458 @@ body {
 .pg-tooltip__conn-label {
   color: var(--pg-text);
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
-  flex-shrink: 0;
+  line-height: 1.3;
 }
 
 .pg-tooltip__conn-reason {
-  opacity: 0.6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--pg-text-muted);
+  font-size: 9.5px;
+  line-height: 1.3;
+  opacity: 0.75;
+  font-style: italic;
 }
 
 /* ─── Tooltip extras ─────────────────────────────────────────────────────── */
 .pg-tooltip__degree {
   opacity: 0.55;
   font-size: 10px;
+}
+
+.pg-tooltip__cluster-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border: 1px solid;
+  margin-bottom: 6px;
+}
+
+.pg-tooltip__explanation {
+  font-size: 11px;
+  color: var(--pg-text-muted);
+  line-height: 1.45;
+  margin: 0 0 8px;
+}
+
+.pg-tooltip__links-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pg-text-muted);
+  opacity: 0.5;
+  margin: 0 0 5px;
+}
+
+.pg-tooltip__cta {
+  font-size: 10px;
+  color: var(--pg-accent);
+  margin: 8px 0 0;
+  opacity: 0.75;
+}
+
+/* ─── Editorial hero ─────────────────────────────────────────────────────── */
+.pg-hero {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--pg-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pg-hero__badge {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+}
+
+.pg-hero__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pg-text);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.pg-hero__why {
+  font-size: 13px;
+  color: var(--pg-text);
+  line-height: 1.55;
+  margin: 0;
+  opacity: 0.85;
+}
+
+.pg-hero__now {
+  font-size: 12px;
+  color: var(--pg-text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ─── Generic section wrapper ────────────────────────────────────────────── */
+.pg-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pg-section__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pg-text-muted);
+  margin: 0;
+}
+
+.pg-section__hint {
+  font-size: 12px;
+  color: var(--pg-text-muted);
+  line-height: 1.5;
+  margin: 0;
+  opacity: 0.75;
+}
+
+/* ─── Consensus callout ──────────────────────────────────────────────────── */
+.pg-consensus-callout {
+  background: var(--pg-surface);
+  border: 1px solid var(--pg-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.pg-consensus-callout__label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pg-text-muted);
+  margin: 0 0 4px;
+}
+
+.pg-consensus-callout__value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--pg-accent);
+  margin: 0 0 10px;
+  line-height: 1.1;
+}
+
+.pg-consensus-callout__units {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--pg-text-muted);
+}
+
+.pg-consensus-callout__bar-track {
+  position: relative;
+  height: 4px;
+  background: var(--pg-border);
+  border-radius: 2px;
+  margin-bottom: 5px;
+}
+
+.pg-consensus-callout__bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--pg-accent);
+  border-radius: 2px;
+  opacity: 0.45;
+}
+
+.pg-consensus-callout__bar-marker {
+  position: absolute;
+  top: -3px;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background: var(--pg-accent);
+  border-radius: 50%;
+  border: 2px solid var(--pg-bg);
+}
+
+.pg-consensus-callout__bounds {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--pg-text-muted);
+  opacity: 0.55;
+}
+
+/* ─── Trade panel wrapper ────────────────────────────────────────────────── */
+.pg-trade-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Activity sub-sections ──────────────────────────────────────────────── */
+.pg-activity-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── Crowd read ─────────────────────────────────────────────────────────── */
+.pg-crowd-summary {
+  font-size: 13px;
+  color: var(--pg-text);
+  line-height: 1.55;
+  margin: 0;
+  opacity: 0.85;
+  padding: 10px 12px;
+  background: var(--pg-surface);
+  border: 1px solid var(--pg-border);
+  border-radius: 10px;
+}
+
+/* ─── Trade mode tabs ────────────────────────────────────────────────────── */
+.pg-trade-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pg-trade-tab {
+  background: var(--pg-surface);
+  border: 1px solid var(--pg-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--pg-font);
+}
+
+.pg-trade-tab:hover {
+  background: var(--pg-surface-2);
+}
+
+.pg-trade-tab--active {
+  border-color: var(--pg-accent);
+  background: var(--pg-surface-2);
+}
+
+.pg-trade-tab__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pg-text);
+  display: block;
+}
+
+.pg-trade-tab--active .pg-trade-tab__name {
+  color: var(--pg-accent);
+}
+
+.pg-trade-tab__desc {
+  font-size: 10px;
+  color: var(--pg-text-muted);
+  line-height: 1.35;
+  display: block;
+}
+
+/* ─── Connection cards (why it connects) ─────────────────────────────────── */
+.pg-connections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pg-connection-card {
+  background: var(--pg-surface);
+  border: 1px solid var(--pg-border);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  font-family: var(--pg-font);
+}
+
+.pg-connection-card:hover {
+  background: var(--pg-surface-2);
+  border-color: var(--pg-accent);
+}
+
+.pg-connection-card__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pg-text);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pg-connection-card__link {
+  font-size: 11px;
+  color: var(--pg-text-muted);
+  line-height: 1.4;
+  margin: 0;
+  font-style: italic;
+}
+
+.pg-connection-card__cluster {
+  font-size: 10px;
+  margin: 0;
+}
+
+/* ─── Edge reason list (Section 4 support copy) ─────────────────────────── */
+.pg-edge-reasons {
+  display: flex;
+  flex-direction: column;
+}
+
+.pg-edge-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--pg-border);
+}
+
+.pg-edge-reason:last-child {
+  border-bottom: none;
+}
+
+.pg-edge-reason__name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pg-text);
+  line-height: 1.35;
+}
+
+.pg-edge-reason__text {
+  font-size: 11px;
+  color: var(--pg-text-muted);
+  line-height: 1.45;
+  font-style: italic;
+}
+
+/* ─── Edge hover tooltip (main graph) ───────────────────────────────────── */
+.pg-tooltip--edge {
+  max-width: 280px;
+}
+
+.pg-tooltip__edge-reason {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pg-text);
+  line-height: 1.4;
+  margin: 0 0 8px;
+  font-style: italic;
+}
+
+.pg-tooltip__edge-markets {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pg-tooltip__edge-market {
+  font-size: 10px;
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+}
+
+.pg-tooltip__edge-arrow {
+  font-size: 10px;
+  color: var(--pg-accent);
+  flex-shrink: 0;
+  padding-top: 1px;
+  opacity: 0.6;
+}
+
+/* ─── Mini subgraph ──────────────────────────────────────────────────────── */
+.pg-mini-subgraph {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pg-mini-subgraph__canvas {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--pg-bg);
+  border: 1px solid var(--pg-border);
+}
+
+.pg-mini-subgraph__hint {
+  font-size: 9.5px;
+  color: var(--pg-text-muted);
+  opacity: 0.5;
+  margin: 0;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* Edge tooltip floating inside mini subgraph canvas */
+.pg-mini-subgraph__edge-tip {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(8,11,18,0.90);
+  border: 1px solid var(--pg-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  pointer-events: none;
+  z-index: 5;
+  white-space: nowrap;
+  max-width: calc(100% - 24px);
+}
+
+.pg-mini-subgraph__edge-reason {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pg-text);
+  margin: 0 0 5px;
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.pg-mini-subgraph__edge-markets {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  flex-wrap: wrap;
+}
+
+.pg-mini-subgraph__edge-arrow {
+  color: var(--pg-accent);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* Compact variant of connection cards — used as secondary below mini subgraph */
+.pg-connections--compact {
+  gap: 6px;
+}
+
+.pg-connections--compact .pg-connection-card {
+  padding: 10px 12px;
 }
 
 /* ─── Loading / error states ─────────────────────────────────────────────── */

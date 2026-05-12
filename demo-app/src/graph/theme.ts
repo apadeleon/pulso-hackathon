@@ -3,12 +3,13 @@
  * All colors are concrete hex/rgba strings — canvas draw calls cannot use CSS variables.
  */
 
-// ─── Cluster palette — 3 macro-clusters ──────────────────────────────────────
-// 0 = AI Arms Race     1 = Capital Stack     2 = New Frontier
+// ─── Cluster palette — 4 macro-clusters ──────────────────────────────────────
+// 0 = World Cup Core     1 = Legacy / Star Power     2 = Attention / Creator Economy     3 = Travel Spillover
 export const CLUSTER_COLORS = [
-  '#38bdf8', // 0 AI Arms Race    — sky blue
-  '#facc15', // 1 Capital Stack   — electric gold
-  '#34d399', // 2 New Frontier    — emerald
+  '#f97316', // 0 World Cup Core            — orange
+  '#facc15', // 1 Legacy / Star Power       — gold
+  '#a78bfa', // 2 Attention / Creator Econ  — purple
+  '#2dd4bf', // 3 Travel Spillover          — teal
 ] as const;
 
 export function clusterColor(group: number): string {

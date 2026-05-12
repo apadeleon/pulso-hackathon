@@ -398,7 +398,7 @@ export function PositionTable({
                   const handleRowClick = () => {
                     const newSelection = isSelected ? null : p;
                     if (onSelectPosition) {
-                      onSelectPosition(isSelected ? null : p.positionId);
+                      onSelectPosition(isSelected ? null : Number(p.positionId));
                     } else {
                       ctx.setSelectedPosition(newSelection);
                     }

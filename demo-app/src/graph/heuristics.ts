@@ -1,142 +1,66 @@
 import type { GraphNode, GraphEdge, EdgeStrength } from './types.js';
 
-const MAX_EDGES_PER_NODE = 14;
-
-interface Score {
-  source: string;
-  target: string;
-  score: number;
+interface CuratedEdge {
+  from: number;
+  to: number;
+  strength: EdgeStrength;
+  weight: number;
   reason: string;
 }
 
-function sharedCount(a: string[], b: string[]): number {
-  const setB = new Set(b);
-  return a.filter(x => setB.has(x)).length;
-}
+const STRONG = 0.85;
+const MEDIUM = 0.55;
+const WEAK   = 0.25;
 
-function keywordsFrom(text: string): string[] {
-  return text.toLowerCase().split(/\W+/).filter(t => t.length > 3);
-}
-
-function keywordOverlap(a: string, b: string): number {
-  const kA = new Set(keywordsFrom(a));
-  const kB = new Set(keywordsFrom(b));
-  let count = 0;
-  for (const k of kA) if (kB.has(k)) count++;
-  return count;
-}
-
-function daysBetween(a: string | null, b: string | null): number | null {
-  if (!a || !b) return null;
-  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86_400_000;
-}
-
-const ECOSYSTEM_GROUPS: ReadonlySet<string>[] = [
-  new Set(['spacex', 'starlink', 'starship']),
+const CURATED_EDGES: CuratedEdge[] = [
+  // ── Strong edges ──────────────────────────────────────────────────────────
+  { from: 129, to: 222, strength: 'strong', weight: STRONG, reason: 'record viewership peaks Twitch too' },
+  { from: 129, to: 248, strength: 'strong', weight: STRONG, reason: 'more viewers means fuller stadiums' },
+  { from: 129, to: 249, strength: 'strong', weight: STRONG, reason: 'bigger audience means more VAR scrutiny' },
+  { from: 129, to: 92,  strength: 'strong', weight: STRONG, reason: 'high stakes matches produce more cards' },
+  { from: 129, to: 244, strength: 'strong', weight: STRONG, reason: 'legends define the tournament story' },
+  { from: 129, to: 247, strength: 'strong', weight: STRONG, reason: 'home tournament drives CONCACAF stakes' },
+  { from: 129, to: 246, strength: 'strong', weight: STRONG, reason: 'big tournament raises South American pull' },
+  { from: 244, to: 93,  strength: 'strong', weight: STRONG, reason: 'Messi goals count in both markets' },
+  { from: 92,  to: 249, strength: 'strong', weight: STRONG, reason: 'yellow cards trigger more VAR checks' },
+  { from: 222, to: 225, strength: 'strong', weight: STRONG, reason: 'Kai surges when Twitch peaks' },
+  { from: 222, to: 231, strength: 'strong', weight: STRONG, reason: 'same moment, rival platforms compete' },
+  { from: 248, to: 73,  strength: 'strong', weight: STRONG, reason: 'full stadiums mean more Mexico travel' },
+  // ── Medium edges ──────────────────────────────────────────────────────────
+  { from: 129, to: 231, strength: 'medium', weight: MEDIUM, reason: 'big World Cup moments spill to Kick' },
+  { from: 129, to: 227, strength: 'medium', weight: MEDIUM, reason: 'tournament moments flood short-form video' },
+  { from: 129, to: 245, strength: 'medium', weight: MEDIUM, reason: 'young stars rewrite the tournament story' },
+  { from: 93,  to: 34,  strength: 'medium', weight: MEDIUM, reason: 'Messi and Ronaldo share the same stage' },
+  { from: 93,  to: 227, strength: 'medium', weight: MEDIUM, reason: 'Messi goal clips go viral instantly' },
+  { from: 247, to: 73,  strength: 'medium', weight: MEDIUM, reason: 'CONCACAF deep runs fill Mexico flights' },
+  { from: 246, to: 73,  strength: 'medium', weight: MEDIUM, reason: 'South American runs drive fan travel' },
+  { from: 244, to: 34,  strength: 'medium', weight: MEDIUM, reason: 'both are chasing a final chapter' },
+  { from: 225, to: 227, strength: 'medium', weight: MEDIUM, reason: 'creator peaks spill to Reels' },
+  { from: 231, to: 227, strength: 'medium', weight: MEDIUM, reason: 'Kick streams spill to Reels' },
+  { from: 249, to: 222, strength: 'medium', weight: MEDIUM, reason: 'VAR controversy drives reaction streams' },
+  { from: 92,  to: 222, strength: 'medium', weight: MEDIUM, reason: 'card drama creates the most-clipped moments' },
+  // ── Weak edges (optional — improve composition without noise) ─────────────
+  { from: 249, to: 227, strength: 'weak', weight: WEAK, reason: 'VAR clips spread via Reels' },
+  { from: 244, to: 222, strength: 'weak', weight: WEAK, reason: 'veteran goals lift streaming demand' },
+  { from: 245, to: 247, strength: 'weak', weight: WEAK, reason: 'U21 minutes cluster in CONCACAF sides' },
+  { from: 245, to: 246, strength: 'weak', weight: WEAK, reason: 'U21 minutes cluster in CONMEBOL sides' },
+  { from: 93,  to: 222, strength: 'weak', weight: WEAK, reason: 'Messi moments lift streaming demand' },
 ];
 
-const RATES_SCOPES = new Set(['Macro & Finance', 'Macroeconomics & Fiat']);
-const EQUITY_SCOPES = new Set(['Equities & Indices', 'Macro & Finance', 'Macroeconomics & Fiat']);
-
-function hasEcosystemWord(text: string, group: ReadonlySet<string>): boolean {
-  return text.toLowerCase().split(/\W+/).some(w => group.has(w));
-}
-
-function strengthFromScore(score: number): EdgeStrength {
-  if (score >= 3.5) return 'strong';
-  if (score >= 1.8) return 'medium';
-  return 'weak';
-}
-
 export function buildEdges(nodes: GraphNode[]): GraphEdge[] {
-  const scores: Score[] = [];
-
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      const a = nodes[i];
-      const b = nodes[j];
-
-      let score = 0;
-      const reasons: string[] = [];
-
-      // Primary: same scope → strongest intra-cluster bond
-      if (a.scope === b.scope) {
-        score += 3;
-        reasons.push('same scope');
-      }
-
-      // Secondary: same macro-cluster, different scope (e.g. Soccer + Basketball)
-      if (a.cluster === b.cluster && a.scope !== b.scope) {
-        score += 1.5;
-        reasons.push('related domain');
-      }
-
-      // Tertiary: shared categories
-      const shared = sharedCount(a.categories, b.categories);
-      if (shared > 0) {
-        score += shared * 0.8;
-        reasons.push(`${shared} shared ${shared === 1 ? 'category' : 'categories'}`);
-      }
-
-      // Tertiary: keyword overlap
-      const kTitle = keywordOverlap(a.title, b.title);
-      const kSubject = keywordOverlap(a.subjectNoun, b.subjectNoun);
-      const kTotal = Math.min(kTitle + kSubject, 2);
-      if (kTotal > 0) {
-        score += kTotal * 0.4;
-        reasons.push('similar topic');
-      }
-
-      // Tertiary: close resolution windows
-      const days = daysBetween(a.resolvesAt, b.resolvesAt);
-      if (days !== null && days <= 30) {
-        score += 0.5;
-        reasons.push('close resolution');
-      }
-
-      // Ecosystem boost: SpaceX/Starlink/Starship co-occurrence
-      for (const group of ECOSYSTEM_GROUPS) {
-        if (hasEcosystemWord(a.title, group) && hasEcosystemWord(b.title, group)) {
-          score += 2.0;
-          reasons.push('same ecosystem');
-          break;
-        }
-      }
-
-      // Macro-signal boost: cross-scope edges within the Capital Stack cluster
-      if (
-        a.cluster === 1 && b.cluster === 1 && a.scope !== b.scope &&
-        (RATES_SCOPES.has(a.scope) || RATES_SCOPES.has(b.scope)) &&
-        (EQUITY_SCOPES.has(a.scope) || EQUITY_SCOPES.has(b.scope))
-      ) {
-        score += 1.0;
-        reasons.push('macro signal');
-      }
-
-      if (score > 0.3) {
-        scores.push({ source: a.id, target: b.id, score, reason: reasons.join(', ') });
-      }
-    }
-  }
-
-  scores.sort((a, b) => b.score - a.score);
-  const degree = new Map<string, number>();
-
+  const nodeIds = new Set(nodes.map(n => String(n.marketId)));
   const edges: GraphEdge[] = [];
-  for (const s of scores) {
-    const da = degree.get(s.source) ?? 0;
-    const db = degree.get(s.target) ?? 0;
-    if (da >= MAX_EDGES_PER_NODE || db >= MAX_EDGES_PER_NODE) continue;
-    degree.set(s.source, da + 1);
-    degree.set(s.target, db + 1);
 
-    const weight = Math.min(s.score / 6, 1);
+  for (const e of CURATED_EDGES) {
+    const src = String(e.from);
+    const tgt = String(e.to);
+    if (!nodeIds.has(src) || !nodeIds.has(tgt)) continue;
     edges.push({
-      source: s.source,
-      target: s.target,
-      strength: strengthFromScore(s.score),
-      weight,
-      reason: s.reason,
+      source: src,
+      target: tgt,
+      strength: e.strength,
+      weight: e.weight,
+      reason: e.reason,
     });
   }
 

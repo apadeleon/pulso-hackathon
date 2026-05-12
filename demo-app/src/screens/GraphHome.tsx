@@ -1,7 +1,7 @@
 import React, {
   useRef, useState, useMemo, useCallback, useEffect,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import _ForceGraph2D from 'react-force-graph-2d';
 import type { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
 // react-force-graph-2d's FCwithRef return type isn't compatible with React 19 ReactNode
@@ -12,6 +12,7 @@ import { forceCollide, forceCenter } from 'd3-force-3d';
 import { PasswordlessAuthWidget } from '@functionspace/ui';
 import { useGraphData } from '../graph/useGraphData';
 import { clusterColor, BG_COLOR, NODE, EDGE, FORCE, CLUSTER_COLORS } from '../graph/theme';
+import { CLUSTER_LABELS, getEditorial } from '../graph/editorial';
 import type { GraphNode, GraphEdge } from '../graph/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -41,13 +42,12 @@ function resolveId(x: string | number | NodeObject): string {
 type FGNode = NodeObject & GraphNode;
 type FGLink = GraphEdge & { source: string | NodeObject; target: string | NodeObject };
 
-// ─── Cluster label positions (static legend) ──────────────────────────────────
-const CLUSTER_LABELS = ['AI Arms Race', 'Capital Stack', 'New Frontier'];
 
 // ─── GraphHome ────────────────────────────────────────────────────────────────
 
 export function GraphHome() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { graphData, loading, error } = useGraphData();
 
   // ── Sizing ─────────────────────────────────────────────────────────────────
@@ -71,6 +71,19 @@ export function GraphHome() {
   const hoverIdRef = useRef<string | null>(null);
   const neighborIdsRef = useRef<Set<string>>(new Set());
   const [hoverNode, setHoverNode] = useState<FGNode | null>(null);
+
+  // Edge hover — tracked separately from node hover
+  const hoverLinkRef = useRef<FGLink | null>(null);
+  const [hoverLink, setHoverLink] = useState<FGLink | null>(null);
+
+  // Clear all hover whenever the route changes (tooltip must never bleed into detail page)
+  useEffect(() => {
+    hoverIdRef.current = null;
+    neighborIdsRef.current = new Set();
+    hoverLinkRef.current = null;
+    setHoverNode(null);
+    setHoverLink(null);
+  }, [location.pathname]);
 
   // ── Adjacency map (built from original string-ID edges before lib mutation) ─
   const adjacencyMap = useMemo(() => {
@@ -125,8 +138,23 @@ export function GraphHome() {
     }
   }, [adjacencyMap]);
 
+  // ── Link hover ────────────────────────────────────────────────────────────
+  const handleLinkHover = useCallback((link: object | null) => {
+    const l = link as FGLink | null;
+    hoverLinkRef.current = l;
+    setHoverLink(l);
+    if (containerRef.current) {
+      containerRef.current.style.cursor = l ? 'crosshair' : 'default';
+    }
+  }, []);
+
   // ── Click → market detail ──────────────────────────────────────────────────
   const handleNodeClick = useCallback((node: NodeObject) => {
+    hoverIdRef.current = null;
+    neighborIdsRef.current = new Set();
+    hoverLinkRef.current = null;
+    setHoverNode(null);
+    setHoverLink(null);
     navigate(`/market/${node.id}`);
   }, [navigate]);
 
@@ -223,41 +251,50 @@ export function GraphHome() {
   // ── Edge reason labels — rendered after the default link line ─────────────
   const paintLink = useCallback((link: object, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const l = link as FGLink;
-    const hoverId = hoverIdRef.current;
-    if (!hoverId || !l.reason) return;
+    if (!l.reason) return;
+    if (typeof l.source !== 'object' || typeof l.target !== 'object') return;
+
+    const hoverId      = hoverIdRef.current;
+    const isLinkHovered = hoverLinkRef.current === l;
 
     const src = resolveId(l.source);
     const tgt = resolveId(l.target);
-    if (src !== hoverId && tgt !== hoverId) return;
-    if (typeof l.source !== 'object' || typeof l.target !== 'object') return;
+    const connectedToNode = !!hoverId && (src === hoverId || tgt === hoverId);
+
+    if (!connectedToNode && !isLinkHovered) return;
 
     const sNode = l.source as FGNode;
     const tNode = l.target as FGNode;
     const mx = ((sNode.x ?? 0) + (tNode.x ?? 0)) / 2;
     const my = ((sNode.y ?? 0) + (tNode.y ?? 0)) / 2;
 
-    const text = truncate(l.reason, 22);
-    const fontSize = Math.max(7 / globalScale, 3);
-    ctx.font = `${fontSize}px -apple-system, "Segoe UI", sans-serif`;
-    ctx.textAlign = 'center';
+    const text     = truncate(l.reason, 26);
+    const fontSize = isLinkHovered
+      ? Math.max(8.5 / globalScale, 3.5)
+      : Math.max(7 / globalScale, 3);
+
+    ctx.font         = `${isLinkHovered ? 600 : 400} ${fontSize}px -apple-system, "Segoe UI", sans-serif`;
+    ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
 
-    const tw = ctx.measureText(text).width;
-    const pad = 2.5 / globalScale;
+    const tw  = ctx.measureText(text).width;
+    const pad = 3 / globalScale;
 
-    ctx.fillStyle = 'rgba(8,11,18,0.75)';
+    ctx.fillStyle = isLinkHovered ? 'rgba(8,11,18,0.92)' : 'rgba(8,11,18,0.75)';
     ctx.fillRect(mx - tw / 2 - pad, my - fontSize / 2 - pad, tw + pad * 2, fontSize + pad * 2);
 
-    ctx.fillStyle = 'rgba(226,232,240,0.62)';
+    ctx.fillStyle = isLinkHovered ? 'rgba(226,232,240,0.95)' : 'rgba(226,232,240,0.62)';
     ctx.fillText(text, mx, my);
   }, []);
 
   // ── Link color / width ─────────────────────────────────────────────────────
   const getLinkColor = useCallback((link: object) => {
-    const l = link as FGLink;
-    const src = resolveId(l.source);
-    const tgt = resolveId(l.target);
+    const l       = link as FGLink;
+    const src     = resolveId(l.source);
+    const tgt     = resolveId(l.target);
     const hoverId = hoverIdRef.current;
+
+    if (hoverLinkRef.current === l) return EDGE.colorHighlighted;
 
     if (!hoverId) {
       if (l.strength === 'strong')  return EDGE.colorStrong;
@@ -270,18 +307,19 @@ export function GraphHome() {
   }, []);
 
   const getLinkWidth = useCallback((link: object) => {
-    const l = link as FGLink;
-    const src = resolveId(l.source);
-    const tgt = resolveId(l.target);
+    const l       = link as FGLink;
+    const src     = resolveId(l.source);
+    const tgt     = resolveId(l.target);
     const hoverId = hoverIdRef.current;
 
+    if (hoverLinkRef.current === l) return EDGE.widthHighlighted;
     if (hoverId && (src === hoverId || tgt === hoverId)) return EDGE.widthHighlighted;
     if (l.strength === 'strong')  return EDGE.widthStrong;
     if (l.strength === 'medium') return EDGE.widthMedium;
     return EDGE.widthWeak;
   }, []);
 
-  // ── Hit area (slightly larger than rendered circle) ─────────────────────────
+  // ── Node hit area (slightly larger than rendered circle) ────────────────────
   const paintNodeArea = useCallback((
     node: NodeObject,
     color: string,
@@ -295,14 +333,32 @@ export function GraphHome() {
     ctx.fill();
   }, []);
 
-  // ── Top connections for tooltip ─────────────────────────────────────────────
+  // ── Link hit area — wide invisible stroke so edges are easy to hover ────────
+  const paintLinkArea = useCallback((
+    link: object,
+    color: string,
+    ctx: CanvasRenderingContext2D,
+  ) => {
+    const l = link as FGLink;
+    if (typeof l.source !== 'object' || typeof l.target !== 'object') return;
+    const src = l.source as FGNode;
+    const tgt = l.target as FGNode;
+    ctx.beginPath();
+    ctx.moveTo(src.x ?? 0, src.y ?? 0);
+    ctx.lineTo(tgt.x ?? 0, tgt.y ?? 0);
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 10;
+    ctx.stroke();
+  }, []);
+
+  // ── Top connections for tooltip (strongest 2 only) ──────────────────────────
   const topConnections = useMemo(() => {
     if (!hoverNode || !graphData) return [];
     const id = String(hoverNode.id);
     return graphData.edges
       .filter(e => e.source === id || e.target === id)
       .sort((a, b) => b.weight - a.weight)
-      .slice(0, 3)
+      .slice(0, 2)
       .flatMap(e => {
         const neighborId = e.source === id ? e.target : e.source;
         const neighbor = graphData.nodes.find(n => n.id === neighborId);
@@ -347,7 +403,9 @@ export function GraphHome() {
           linkWidth={getLinkWidth}
           linkCanvasObject={paintLink}
           linkCanvasObjectMode={() => 'after'}
+          linkPointerAreaPaint={paintLinkArea}
           onNodeHover={handleNodeHover}
+          onLinkHover={handleLinkHover}
           onNodeClick={handleNodeClick}
           onEngineStop={handleEngineStop}
           d3AlphaDecay={FORCE.alphaDecay}
@@ -364,7 +422,7 @@ export function GraphHome() {
       <div className="pg-hud">
         <div className="pg-hud__left">
           <span className="pg-logo">Puls<span>o</span></span>
-          {ready && !hoverNode && (
+          {ready && !hoverNode && !hoverLink && (
             <div className="pg-cluster-legend">
               {CLUSTER_LABELS.map((label, i) => (
                 <div key={i} className="pg-cluster-legend__item">
@@ -383,36 +441,68 @@ export function GraphHome() {
         </div>
       </div>
 
-      {/* Hover tooltip — bottom of screen */}
-      {ready && hoverNode && (
-        <div
-          className="pg-tooltip"
-          style={{ position: 'absolute', bottom: 24, left: 24 }}
-        >
-          <p className="pg-tooltip__title">{hoverNode.title}</p>
-          <p className="pg-tooltip__scope">
+      {/* Edge hover tooltip */}
+      {ready && !hoverNode && hoverLink && (() => {
+        const src = typeof hoverLink.source === 'object' ? hoverLink.source as FGNode : null;
+        const tgt = typeof hoverLink.target === 'object' ? hoverLink.target as FGNode : null;
+        if (!src || !tgt || !hoverLink.reason) return null;
+        const srcColor = clusterColor(src.group ?? 0);
+        const tgtColor = clusterColor(tgt.group ?? 0);
+        return (
+          <div className="pg-tooltip pg-tooltip--edge" style={{ position: 'absolute', bottom: 24, left: 24 }}>
+            <p className="pg-tooltip__edge-reason">"{hoverLink.reason}"</p>
+            <hr className="pg-tooltip__divider" />
+            <div className="pg-tooltip__edge-markets">
+              <span className="pg-tooltip__edge-market" style={{ color: srcColor }}>
+                {truncate(src.title, 26)}
+              </span>
+              <span className="pg-tooltip__edge-arrow">↔</span>
+              <span className="pg-tooltip__edge-market" style={{ color: tgtColor }}>
+                {truncate(tgt.title, 26)}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Node hover tooltip — bottom of screen */}
+      {ready && hoverNode && (() => {
+        const editorial = getEditorial(hoverNode.marketId);
+        const clusterLabel = CLUSTER_LABELS[hoverNode.group ?? 0];
+        const color = clusterColor(hoverNode.group ?? 0);
+        return (
+          <div
+            className="pg-tooltip"
+            style={{ position: 'absolute', bottom: 24, left: 24 }}
+          >
             <span
-              className="pg-tooltip__dot"
-              style={{ background: clusterColor(hoverNode.group ?? 0) }}
-            />
-            {hoverNode.scope}
-            {hoverNode.degree > 0 && (
-              <span className="pg-tooltip__degree"> · {hoverNode.degree} connections</span>
+              className="pg-tooltip__cluster-badge"
+              style={{ borderColor: color, color }}
+            >
+              {clusterLabel}
+            </span>
+            <p className="pg-tooltip__title">{hoverNode.title}</p>
+            {editorial && (
+              <p className="pg-tooltip__explanation">{editorial.hoverExplanation}</p>
             )}
-          </p>
-          {topConnections.length > 0 && (
-            <>
-              <hr className="pg-tooltip__divider" />
-              {topConnections.map((c, i) => (
-                <p key={i} className="pg-tooltip__connection">
-                  <span className="pg-tooltip__conn-label">{truncate(c.title, 28)}</span>
-                  <span className="pg-tooltip__conn-reason">· {c.reason}</span>
-                </p>
-              ))}
-            </>
-          )}
-        </div>
-      )}
+            {topConnections.length > 0 && (
+              <>
+                <hr className="pg-tooltip__divider" />
+                <p className="pg-tooltip__links-label">Also moves with</p>
+                {topConnections.map((c, i) => (
+                  <div key={i} className="pg-tooltip__connection">
+                    <span className="pg-tooltip__conn-label">{truncate(c.title, 28)}</span>
+                    {c.reason && (
+                      <span className="pg-tooltip__conn-reason">{truncate(c.reason, 30)}</span>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+            <p className="pg-tooltip__cta">Click to explore this storyline →</p>
+          </div>
+        );
+      })()}
     </div>
   );
 }
