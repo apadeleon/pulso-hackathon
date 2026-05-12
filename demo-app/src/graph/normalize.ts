@@ -15,16 +15,6 @@ export const MARKET_CLUSTER: Record<number, number> = {
   189: 2, 190: 2,   5: 2, 242: 2, 164: 2,
 };
 
-// Kept for display/tooltip use — cluster indices reflect new 3-cluster scheme.
-export const SCOPE_TO_CLUSTER: Record<string, number> = {
-  'Technology & AI': 0,
-  'Equities & Indices': 1,
-  'Macroeconomics & Fiat': 1,
-  'Macro & Finance': 1,
-  'Space Economy & Aerospace': 2,
-  'Cryptocurrency & Web3': 2,
-  'Crypto & DeFi': 2,
-};
 
 const SCOPE_OVERRIDES: Record<string, string> = {
   'Crypto & DeFi': 'Cryptocurrency & Web3',

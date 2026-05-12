@@ -35,6 +35,9 @@ const ECOSYSTEM_GROUPS: ReadonlySet<string>[] = [
   new Set(['spacex', 'starlink', 'starship']),
 ];
 
+const RATES_SCOPES = new Set(['Macro & Finance', 'Macroeconomics & Fiat']);
+const EQUITY_SCOPES = new Set(['Equities & Indices', 'Macro & Finance', 'Macroeconomics & Fiat']);
+
 function hasEcosystemWord(text: string, group: ReadonlySet<string>): boolean {
   return text.toLowerCase().split(/\W+/).some(w => group.has(w));
 }
@@ -101,8 +104,6 @@ export function buildEdges(nodes: GraphNode[]): GraphEdge[] {
       }
 
       // Macro-signal boost: cross-scope edges within the Capital Stack cluster
-      const RATES_SCOPES = new Set(['Macro & Finance', 'Macroeconomics & Fiat']);
-      const EQUITY_SCOPES = new Set(['Equities & Indices', 'Macro & Finance', 'Macroeconomics & Fiat']);
       if (
         a.cluster === 1 && b.cluster === 1 && a.scope !== b.scope &&
         (RATES_SCOPES.has(a.scope) || RATES_SCOPES.has(b.scope)) &&
