@@ -1,9 +1,369 @@
-/* Demo app page background -- not part of the SDK theme system */
-/* Switch to match your active theme preset in App.tsx */
-body {
-  /* background: #0a0a0f; fs-dark / fs-midnight */
-  /* background: #f8fafc; */ /* fs-light */
-  /* background: #ffffff; native-light */
-  background: #111111; /* native-dark */
-  margin: 0;
+/* ─── Pulso Graph — shell styles ─────────────────────────────────────────── */
+
+/* Design tokens */
+:root {
+  --pg-bg:           #080b12;   /* deep navy-black canvas */
+  --pg-bg-secondary: #0d1117;   /* slightly lifted surface */
+  --pg-surface:      #111827;   /* card / panel background */
+  --pg-surface-2:    #1a2236;   /* raised elements */
+  --pg-border:       #1f2d40;   /* subtle dividers */
+  --pg-text:         #e2e8f0;   /* primary text */
+  --pg-text-muted:   #64748b;   /* secondary / dimmed text */
+  --pg-accent:       #38bdf8;   /* sky-blue interactive accent */
+  --pg-glow:         rgba(56, 189, 248, 0.25); /* accent glow */
+  --pg-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
 }
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--pg-bg);
+  color: var(--pg-text);
+  font-family: var(--pg-font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Graph canvas fills viewport */
+.pg-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ─── Graph container — full viewport ─── */
+.pg-phone {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--pg-bg);
+}
+
+/* ─── HUD overlay ────────────────────────────────────────────────────────── */
+.pg-hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  /* subtle gradient so HUD doesn't bleed into the graph */
+  background: linear-gradient(to bottom, rgba(8,11,18,0.72) 0%, transparent 100%);
+}
+
+.pg-hud > * { pointer-events: all; }
+
+.pg-hud__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: all;
+}
+
+/* Compact auth widget — hide promo text, keep just the button */
+.pg-hud__auth {
+  pointer-events: all;
+}
+
+.pg-hud__auth .fs-auth-actions > span {
+  display: none !important;
+}
+
+.pg-hud__auth .fs-auth-btn-primary {
+  font-size: 11px !important;
+  padding: 5px 11px !important;
+  border-radius: 8px !important;
+  white-space: nowrap;
+}
+
+/* Authenticated state: keep compact */
+.pg-hud__auth .fs-auth-user {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+/* Logo / wordmark */
+.pg-logo {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--pg-text);
+  text-transform: uppercase;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.pg-logo span {
+  color: var(--pg-accent);
+}
+
+/* ─── Cluster legend (inline with logo) ──────────────────────────────────── */
+.pg-cluster-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pg-cluster-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pg-cluster-legend__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.pg-cluster-legend__label {
+  font-size: 10px;
+  color: var(--pg-text-muted);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* ─── Market detail screen ────────────────────────────────────────────────── */
+@keyframes pg-slide-up {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.pg-detail {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--pg-bg);
+  z-index: 20;
+  animation: pg-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pg-detail__header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--pg-bg);
+  border-bottom: 1px solid var(--pg-border);
+}
+
+.pg-detail__header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pg-detail__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pg-detail__body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pg-detail__section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pg-text-muted);
+  margin: 0 0 8px;
+}
+
+/* Related markets strip */
+.pg-related {
+  overflow-x: auto;
+  display: flex;
+  gap: 8px;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.pg-related::-webkit-scrollbar { display: none; }
+
+.pg-related-card {
+  flex: 0 0 auto;
+  width: 160px;
+  background: var(--pg-surface);
+  border: 1px solid var(--pg-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+}
+
+.pg-related-card:hover {
+  background: var(--pg-surface-2);
+  border-color: var(--pg-accent);
+}
+
+.pg-related-card__title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pg-text);
+  line-height: 1.4;
+  margin: 0 0 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pg-related-card__scope {
+  font-size: 10px;
+  color: var(--pg-accent);
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pg-related-card__reason {
+  font-size: 10px;
+  color: var(--pg-text-muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pg-back-btn {
+  background: none;
+  border: none;
+  color: var(--pg-accent);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: var(--pg-font);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pg-back-btn:hover { opacity: 0.7; }
+
+/* ─── Node tooltip / hover card ──────────────────────────────────────────── */
+.pg-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--pg-surface-2);
+  border: 1px solid var(--pg-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  max-width: 320px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+  z-index: 30;
+}
+
+.pg-tooltip__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pg-text);
+  line-height: 1.4;
+  margin: 0 0 5px;
+}
+
+.pg-tooltip__scope {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--pg-text-muted);
+  margin: 0 0 7px;
+}
+
+.pg-tooltip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pg-tooltip__divider {
+  border: none;
+  border-top: 1px solid var(--pg-border);
+  margin: 0 0 7px;
+}
+
+.pg-tooltip__connection {
+  font-size: 10px;
+  color: var(--pg-text-muted);
+  margin: 0 0 3px;
+  line-height: 1.4;
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+}
+
+.pg-tooltip__connection:last-child { margin-bottom: 0; }
+
+.pg-tooltip__conn-label {
+  color: var(--pg-text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  flex-shrink: 0;
+}
+
+.pg-tooltip__conn-reason {
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Tooltip extras ─────────────────────────────────────────────────────── */
+.pg-tooltip__degree {
+  opacity: 0.55;
+  font-size: 10px;
+}
+
+/* ─── Loading / error states ─────────────────────────────────────────────── */
+.pg-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--pg-text-muted);
+  font-size: 13px;
+}
+
+/* ─── Scrollbar reset ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--pg-border); border-radius: 2px; }
