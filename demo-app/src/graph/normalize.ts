@@ -28,7 +28,6 @@ export const SCOPE_TO_CLUSTER: Record<string, number> = {
 
 const SCOPE_OVERRIDES: Record<string, string> = {
   'Crypto & DeFi': 'Cryptocurrency & Web3',
-  'Commodities & Energy': 'Commodities & Physical Assets',
 };
 
 function normalizeScope(raw: string): string {
