@@ -1,508 +1,491 @@
 import React, {
-  useRef, useState, useMemo, useCallback, useEffect,
+  useState, useMemo, useCallback, useEffect,
 } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import _ForceGraph2D from 'react-force-graph-2d';
-import type { ForceGraphMethods, NodeObject } from 'react-force-graph-2d';
-// react-force-graph-2d's FCwithRef return type isn't compatible with React 19 ReactNode
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ForceGraph2D = _ForceGraph2D as unknown as React.FC<any>;
-// @ts-expect-error: d3-force-3d is the force library bundled with react-force-graph-2d
-import { forceCollide, forceCenter } from 'd3-force-3d';
 import { PasswordlessAuthWidget } from '@functionspace/ui';
 import { useGraphData } from '../graph/useGraphData';
-import { clusterColor, BG_COLOR, NODE, EDGE, FORCE, CLUSTER_COLORS } from '../graph/theme';
 import { CLUSTER_LABELS, getEditorial } from '../graph/editorial';
 import type { GraphNode, GraphEdge } from '../graph/types';
+import { GraphSVG, DESIGN_COLORS } from '../components/GraphSVG';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
+const WEIGHT_MAP: Record<string, number> = { strong: 3, medium: 2, weak: 1 };
+
+// Cluster short labels (matching design palette)
+const CLUSTER_SHORTS = ['CORE', 'LEGACY', 'ATTENTION', 'TRAVEL'] as const;
+
+// ─── Rail cover ───────────────────────────────────────────────────────────────
+
+interface RailCoverProps {
+  filterCluster: number | null;
+  onFilterChange: (cluster: number | null) => void;
+  onStartTour: () => void;
 }
 
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
+function RailCover({ filterCluster, onFilterChange, onStartTour }: RailCoverProps) {
+  return (
+    <>
+      <div className="pg-cover__masthead">
+        <div className="pg-cover__logo">
+          Puls<span className="pg-cover__logo-dot"/>o
+        </div>
+        <div className="pg-cover__meta">
+          <span className="pg-cover__meta-issue">Issue 01</span>
+          <span className="pg-cover__meta-date">May 13, 2026 · 28 days to kickoff</span>
+        </div>
+      </div>
+
+      <div className="pg-cover__eyebrow">The 2026 World Cup, as one connected market</div>
+
+      <h1 className="pg-cover__headline">
+        Fifteen markets. Four storylines. One tournament.
+      </h1>
+
+      <p className="pg-cover__deck">
+        We don&rsquo;t think the right question is{' '}
+        <em>which contract should I trade</em>. The right question is{' '}
+        <em>which contracts move together — and why.</em>
+      </p>
+
+      <div className="pg-cover__byline">By the Pulso desk · Curated 13.05.2026</div>
+
+      <div className="pg-cover__body">
+        <p>
+          Most market apps treat every contract as an island. A list, a chart, a buy
+          button. The 2026 World Cup is not a list. It is a system. When Messi scores,
+          four other markets re-price in the same second. When the USA reaches the round
+          of 16, Mexico&rsquo;s flight market wakes up. The story is in the edges, not the nodes.
+        </p>
+        <p>
+          What you are looking at is a hand-curated graph of fifteen World-Cup-adjacent
+          markets, drawn so the relationships are the first thing you see. Four
+          neighborhoods —{' '}
+          <em>Core</em>, <em>Legacy</em>, <em>Attention</em>, and <em>Travel</em>{' '}
+          — meet at the markets that bridge them.
+        </p>
+        <div className="pg-cover__pullquote">
+          &ldquo;The story is in the edges, not the nodes.&rdquo;
+        </div>
+        <p>
+          Hover any market to read the one-sentence reason it sits where it does.
+          Click any market to open its story in this column. The graph never leaves
+          your view.
+        </p>
+      </div>
+
+      <div className="pg-cover__cta">
+        <div className="pg-cover__cta-label">Start here</div>
+        <div className="pg-cover__cta-body">
+          New to the graph? Walk through the five keystone markets in order. About a minute.
+        </div>
+        <button
+          className="pg-filter-chip pg-filter-chip--active"
+          style={{ marginTop: 4 }}
+          onClick={onStartTour}
+        >
+          Start the tour →
+        </button>
+      </div>
+
+      <div className="pg-cover__filters">
+        <div className="pg-cover__filters-label">Filter by storyline</div>
+        <div className="pg-cover__filters-chips">
+          <button
+            className={'pg-filter-chip' + (filterCluster === null ? ' pg-filter-chip--active' : '')}
+            onClick={() => onFilterChange(null)}
+          >
+            All
+          </button>
+          {CLUSTER_LABELS.map((label, i) => (
+            <button
+              key={i}
+              className={'pg-filter-chip' + (filterCluster === i ? ' pg-filter-chip--active' : '')}
+              onClick={() => onFilterChange(filterCluster === i ? null : i)}
+            >
+              <span className="pg-filter-chip__dot" style={{ background: DESIGN_COLORS[i] }}/>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
 }
 
-function nodeRadius(n: FGNode): number {
-  const extra = Math.min((n.degree ?? 0), NODE.radiusDegreeMax / NODE.radiusPerDegree) * NODE.radiusPerDegree;
-  return NODE.radius + extra;
+// ─── Rail story ───────────────────────────────────────────────────────────────
+
+interface RailStoryProps {
+  focusedNode: GraphNode;
+  focusedConnections: Array<{ node: GraphNode; edge: GraphEdge }>;
+  onClose: () => void;
+  onConnectionClick: (id: string) => void;
+  onConnectionHover: (id: string | null) => void;
 }
 
-// After the force graph processes links, source/target become node objects.
-function resolveId(x: string | number | NodeObject): string {
-  if (typeof x === 'object' && x !== null) return String((x as NodeObject).id ?? '');
-  return String(x);
+function RailStory({
+  focusedNode,
+  focusedConnections,
+  onClose,
+  onConnectionClick,
+  onConnectionHover,
+}: RailStoryProps) {
+  const editorial = getEditorial(focusedNode.marketId);
+  const clusterLabel = CLUSTER_LABELS[focusedNode.group ?? 0];
+  const clusterShort = CLUSTER_SHORTS[focusedNode.group as 0|1|2|3];
+  const color = DESIGN_COLORS[focusedNode.group % 4];
+
+  return (
+    <>
+      <div className="pg-story__header">
+        <div className="pg-story__breadcrumb">
+          <span>Pulso</span>
+          <span className="pg-story__breadcrumb-sep">/</span>
+          <span style={{ color }}>{clusterShort}</span>
+        </div>
+        <button className="pg-story__close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+
+      <div className="pg-story__cluster-badge" style={{ color }}>
+        <span className="pg-story__cluster-dot" style={{ background: color }}/>
+        {clusterLabel}
+      </div>
+
+      <h1 className="pg-story__title">{focusedNode.title}</h1>
+
+      {editorial && (
+        <p className="pg-story__pull">{editorial.hoverExplanation}</p>
+      )}
+
+      {editorial && (
+        <div className="pg-story__section">
+          <div className="pg-story__section-label">Why it matters</div>
+          <p className="pg-story__body">{editorial.whyItMatters}</p>
+        </div>
+      )}
+
+      {editorial && (
+        <div className="pg-story__section">
+          <div className="pg-story__section-label">What&rsquo;s happening now</div>
+          <p className="pg-story__body">{editorial.nowContext}</p>
+        </div>
+      )}
+
+      <div className="pg-story__section">
+        <div className="pg-story__section-label">
+          Why this connects ({focusedConnections.length})
+        </div>
+        <div className="pg-conns">
+          {focusedConnections.map(({ node: other, edge }, i) => {
+            const otherColor = DESIGN_COLORS[other.group % 4];
+            return (
+              <div
+                key={other.id}
+                className="pg-conn"
+                onMouseEnter={() => onConnectionHover(other.id)}
+                onMouseLeave={() => onConnectionHover(null)}
+                onClick={() => { onConnectionHover(null); onConnectionClick(other.id); }}
+              >
+                <span className="pg-conn__num">0{i + 1}</span>
+                <span className="pg-conn__title">{other.title}</span>
+                <span className="pg-conn__dot" style={{ background: otherColor }}/>
+                <p className="pg-conn__reason">&ldquo;{edge.reason}&rdquo;</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="pg-story__section">
+        <div className="pg-story__section-label">Take a view</div>
+        <div className="pg-story__take-prompt">
+          <span className="pg-story__take-prompt-dot"/>
+          <span>
+            Build your call using the{' '}
+            <em>floating card on the map</em>{' '}
+            — then place it solo or add it to your combo.
+          </span>
+        </div>
+      </div>
+    </>
+  );
 }
-
-type FGNode = NodeObject & GraphNode;
-type FGLink = GraphEdge & { source: string | NodeObject; target: string | NodeObject };
-
 
 // ─── GraphHome ────────────────────────────────────────────────────────────────
 
 export function GraphHome() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { graphData, loading, error } = useGraphData();
 
-  // ── Sizing ─────────────────────────────────────────────────────────────────
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dims, setDims] = useState({ w: 0, h: 0 });
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => {
-      setDims({ w: e.contentRect.width, h: e.contentRect.height });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [filterCluster, setFilterCluster] = useState<number | null>(null);
+  const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
 
-  // ── Force graph ref ─────────────────────────────────────────────────────────
-  const fgRef = useRef<ForceGraphMethods>();
-  const hasZoomedRef = useRef(false);
+  // ── Focused node + connections ─────────────────────────────────────────
+  const focusedNode = useMemo<GraphNode | null>(() => {
+    if (!focusedId || !graphData) return null;
+    return graphData.nodes.find(n => n.id === focusedId) ?? null;
+  }, [focusedId, graphData]);
 
-  // ── Hover state — refs for canvas callbacks, state for React tooltip ────────
-  const hoverIdRef = useRef<string | null>(null);
-  const neighborIdsRef = useRef<Set<string>>(new Set());
-  const [hoverNode, setHoverNode] = useState<FGNode | null>(null);
-
-  // Edge hover — tracked separately from node hover
-  const hoverLinkRef = useRef<FGLink | null>(null);
-  const [hoverLink, setHoverLink] = useState<FGLink | null>(null);
-
-  // Clear all hover whenever the route changes (tooltip must never bleed into detail page)
-  useEffect(() => {
-    hoverIdRef.current = null;
-    neighborIdsRef.current = new Set();
-    hoverLinkRef.current = null;
-    setHoverNode(null);
-    setHoverLink(null);
-  }, [location.pathname]);
-
-  // ── Adjacency map (built from original string-ID edges before lib mutation) ─
-  const adjacencyMap = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    if (!graphData) return map;
+  const focusedConnections = useMemo<Array<{ node: GraphNode; edge: GraphEdge }>>(() => {
+    if (!focusedId || !graphData) return [];
+    const results: Array<{ node: GraphNode; edge: GraphEdge }> = [];
     for (const e of graphData.edges) {
-      if (!map.has(e.source)) map.set(e.source, new Set());
-      if (!map.has(e.target)) map.set(e.target, new Set());
-      map.get(e.source)!.add(e.target);
-      map.get(e.target)!.add(e.source);
+      const isSource = e.source === focusedId;
+      const isTarget = e.target === focusedId;
+      if (isSource || isTarget) {
+        const otherId = isSource ? e.target : e.source;
+        const other = graphData.nodes.find(n => n.id === otherId);
+        if (other) results.push({ node: other, edge: e });
+      }
     }
-    return map;
-  }, [graphData]);
+    return results.sort(
+      (a, b) => (WEIGHT_MAP[b.edge.strength] ?? 0) - (WEIGHT_MAP[a.edge.strength] ?? 0),
+    );
+  }, [focusedId, graphData]);
 
-  // ── Convert edges → links (copy to prevent library from mutating originals) ─
-  const fgData = useMemo(() => {
-    if (!graphData) return { nodes: [], links: [] };
-    return {
-      nodes: graphData.nodes,
-      links: graphData.edges.map(e => ({ ...e })),
-    };
-  }, [graphData]);
-
-  // ── Configure d3 forces once ForceGraph2D has mounted and data is ready ─────
+  // ── Keyboard ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!fgRef.current || !graphData) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (fgRef.current.d3Force('link') as any)?.distance(FORCE.linkDistance);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (fgRef.current.d3Force('charge') as any)?.strength(FORCE.chargeStrength);
-    fgRef.current.d3Force('collide', forceCollide(FORCE.collideRadius));
-    // Pull the entire graph mass toward the center so it forms a tight cloud
-    fgRef.current.d3Force('center', forceCenter(0, 0).strength(FORCE.centerStrength));
-  }, [graphData, dims.w]);
-
-  // ── Zoom to fit once the simulation settles ─────────────────────────────────
-  const handleEngineStop = useCallback(() => {
-    if (!hasZoomedRef.current) {
-      fgRef.current?.zoomToFit(900, 16);
-      hasZoomedRef.current = true;
-    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setFocusedId(null); setHoveredConnId(null); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // ── Hover ──────────────────────────────────────────────────────────────────
-  const handleNodeHover = useCallback((node: NodeObject | null) => {
-    const id = node ? String(node.id ?? '') : null;
-    hoverIdRef.current = id;
-    neighborIdsRef.current = id ? (adjacencyMap.get(id) ?? new Set()) : new Set();
-    setHoverNode(node as FGNode | null);
-    if (containerRef.current) {
-      containerRef.current.style.cursor = node ? 'pointer' : 'default';
-    }
-  }, [adjacencyMap]);
-
-  // ── Link hover ────────────────────────────────────────────────────────────
-  const handleLinkHover = useCallback((link: object | null) => {
-    const l = link as FGLink | null;
-    hoverLinkRef.current = l;
-    setHoverLink(l);
-    if (containerRef.current) {
-      containerRef.current.style.cursor = l ? 'crosshair' : 'default';
-    }
+  const handleNodeClick = useCallback((id: string) => {
+    setHoveredConnId(null);
+    setFocusedId(id);
   }, []);
 
-  // ── Click → market detail ──────────────────────────────────────────────────
-  const handleNodeClick = useCallback((node: NodeObject) => {
-    hoverIdRef.current = null;
-    neighborIdsRef.current = new Set();
-    hoverLinkRef.current = null;
-    setHoverNode(null);
-    setHoverLink(null);
-    navigate(`/market/${node.id}`);
-  }, [navigate]);
-
-  // ── Custom node painter ────────────────────────────────────────────────────
-  const paintNode = useCallback((
-    node: NodeObject,
-    ctx: CanvasRenderingContext2D,
-    globalScale: number,
-  ) => {
-    const n = node as FGNode;
-    const { x = 0, y = 0 } = n;
-    const color = clusterColor(n.group ?? 0);
-
-    const hoverId = hoverIdRef.current;
-    const isHovered  = String(n.id) === hoverId;
-    const isNeighbor = !!hoverId && neighborIdsRef.current.has(String(n.id));
-    const hasHover   = hoverId !== null;
-    const isDimmed   = hasHover && !isHovered && !isNeighbor;
-
-    // Degree-proportional radius — hub nodes visually larger
-    const baseR = nodeRadius(n);
-    const r     = isHovered ? NODE.radiusHover : baseR;
-    const alpha = isDimmed ? NODE.alphaDimmed : isHovered ? NODE.alphaHover : NODE.alphaDefault;
-
-    const t       = Date.now() / 4200 + (n.group ?? 0) * 0.18;
-    const breathe = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
-
-    ctx.save();
-
-    if (!isDimmed) {
-      const glowR = isHovered
-        ? NODE.glowRadiusHover
-        : isNeighbor
-        ? NODE.glowRadiusDefault * 1.6
-        : NODE.glowRadiusDefault;
-      const baseGlowA = isHovered
-        ? NODE.glowAlphaHover
-        : isNeighbor
-        ? NODE.glowAlphaDefault * 1.5
-        : NODE.glowAlphaDefault;
-      const glowA = baseGlowA * (0.78 + 0.44 * breathe);
-
-      ctx.shadowColor = color;
-      ctx.shadowBlur  = glowR;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = hexToRgba(color, glowA * 0.35);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    // Core circle
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = hexToRgba(color, alpha);
-    ctx.fill();
-
-    // Ring on hover
-    if (isHovered) {
-      ctx.strokeStyle = hexToRgba(color, NODE.ringAlpha);
-      ctx.lineWidth = NODE.ringWidth / globalScale;
-      ctx.stroke();
-    }
-
-    // Labels:
-    // - always visible for hub nodes (high degree)
-    // - always visible on hover or neighbor
-    // - visible at moderate zoom (>1.6)
-    const isHub = (n.degree ?? 0) >= NODE.hubDegree;
-    const showLabel = !isDimmed && (isHub || isHovered || isNeighbor || globalScale > 0.8);
-
-    if (showLabel) {
-      const label    = truncate(n.title ?? '', NODE.labelMaxChars);
-      const fontSize = isHovered
-        ? Math.max(10 / globalScale, 4.5)
-        : isHub
-        ? Math.max(9.5 / globalScale, 4)
-        : Math.max(8.5 / globalScale, 3.5);
-
-      ctx.font         = `${isHovered || isHub ? 600 : 400} ${fontSize}px -apple-system, "Segoe UI", sans-serif`;
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'top';
-
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur  = 4;
-      ctx.fillStyle   = hexToRgba('#e2e8f0', isHovered ? 0.97 : isHub ? 0.80 : 0.60);
-      ctx.fillText(label, x, y + r + 2.5 / globalScale);
-      ctx.shadowBlur  = 0;
-    }
-
-    ctx.restore();
+  const handleBackgroundClick = useCallback(() => {
+    setFocusedId(null);
+    setHoveredConnId(null);
   }, []);
-
-  // ── Edge reason labels — rendered after the default link line ─────────────
-  const paintLink = useCallback((link: object, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const l = link as FGLink;
-    if (!l.reason) return;
-    if (typeof l.source !== 'object' || typeof l.target !== 'object') return;
-
-    const hoverId      = hoverIdRef.current;
-    const isLinkHovered = hoverLinkRef.current === l;
-
-    const src = resolveId(l.source);
-    const tgt = resolveId(l.target);
-    const connectedToNode = !!hoverId && (src === hoverId || tgt === hoverId);
-
-    if (!connectedToNode && !isLinkHovered) return;
-
-    const sNode = l.source as FGNode;
-    const tNode = l.target as FGNode;
-    const mx = ((sNode.x ?? 0) + (tNode.x ?? 0)) / 2;
-    const my = ((sNode.y ?? 0) + (tNode.y ?? 0)) / 2;
-
-    const text     = truncate(l.reason, 26);
-    const fontSize = isLinkHovered
-      ? Math.max(8.5 / globalScale, 3.5)
-      : Math.max(7 / globalScale, 3);
-
-    ctx.font         = `${isLinkHovered ? 600 : 400} ${fontSize}px -apple-system, "Segoe UI", sans-serif`;
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'middle';
-
-    const tw  = ctx.measureText(text).width;
-    const pad = 3 / globalScale;
-
-    ctx.fillStyle = isLinkHovered ? 'rgba(8,11,18,0.92)' : 'rgba(8,11,18,0.75)';
-    ctx.fillRect(mx - tw / 2 - pad, my - fontSize / 2 - pad, tw + pad * 2, fontSize + pad * 2);
-
-    ctx.fillStyle = isLinkHovered ? 'rgba(226,232,240,0.95)' : 'rgba(226,232,240,0.62)';
-    ctx.fillText(text, mx, my);
-  }, []);
-
-  // ── Link color / width ─────────────────────────────────────────────────────
-  const getLinkColor = useCallback((link: object) => {
-    const l       = link as FGLink;
-    const src     = resolveId(l.source);
-    const tgt     = resolveId(l.target);
-    const hoverId = hoverIdRef.current;
-
-    if (hoverLinkRef.current === l) return EDGE.colorHighlighted;
-
-    if (!hoverId) {
-      if (l.strength === 'strong')  return EDGE.colorStrong;
-      if (l.strength === 'medium') return EDGE.colorMedium;
-      return EDGE.colorWeak;
-    }
-    if (src === hoverId || tgt === hoverId) return EDGE.colorHighlighted;
-    if (neighborIdsRef.current.has(src) && neighborIdsRef.current.has(tgt)) return EDGE.colorMedium;
-    return EDGE.colorDimmed;
-  }, []);
-
-  const getLinkWidth = useCallback((link: object) => {
-    const l       = link as FGLink;
-    const src     = resolveId(l.source);
-    const tgt     = resolveId(l.target);
-    const hoverId = hoverIdRef.current;
-
-    if (hoverLinkRef.current === l) return EDGE.widthHighlighted;
-    if (hoverId && (src === hoverId || tgt === hoverId)) return EDGE.widthHighlighted;
-    if (l.strength === 'strong')  return EDGE.widthStrong;
-    if (l.strength === 'medium') return EDGE.widthMedium;
-    return EDGE.widthWeak;
-  }, []);
-
-  // ── Node hit area (slightly larger than rendered circle) ────────────────────
-  const paintNodeArea = useCallback((
-    node: NodeObject,
-    color: string,
-    ctx: CanvasRenderingContext2D,
-  ) => {
-    const { x = 0, y = 0 } = node;
-    const r = nodeRadius(node as FGNode);
-    ctx.beginPath();
-    ctx.arc(x, y, r + 10, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-  }, []);
-
-  // ── Link hit area — wide invisible stroke so edges are easy to hover ────────
-  const paintLinkArea = useCallback((
-    link: object,
-    color: string,
-    ctx: CanvasRenderingContext2D,
-  ) => {
-    const l = link as FGLink;
-    if (typeof l.source !== 'object' || typeof l.target !== 'object') return;
-    const src = l.source as FGNode;
-    const tgt = l.target as FGNode;
-    ctx.beginPath();
-    ctx.moveTo(src.x ?? 0, src.y ?? 0);
-    ctx.lineTo(tgt.x ?? 0, tgt.y ?? 0);
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = 10;
-    ctx.stroke();
-  }, []);
-
-  // ── Top connections for tooltip (strongest 2 only) ──────────────────────────
-  const topConnections = useMemo(() => {
-    if (!hoverNode || !graphData) return [];
-    const id = String(hoverNode.id);
-    return graphData.edges
-      .filter(e => e.source === id || e.target === id)
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, 2)
-      .flatMap(e => {
-        const neighborId = e.source === id ? e.target : e.source;
-        const neighbor = graphData.nodes.find(n => n.id === neighborId);
-        return neighbor ? [{ title: neighbor.title, reason: e.reason }] : [];
-      });
-  }, [hoverNode, graphData]);
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-  const ready = !loading && !error && dims.w > 0;
 
   return (
-    <div ref={containerRef} style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+    <div className="pg-shell">
 
-      {loading && (
-        <div className="pg-center">
-          <span style={{ color: 'var(--pg-accent)', fontSize: 12, opacity: 0.75 }}>
-            Loading signal map…
-          </span>
+      {/* ── Masthead ── */}
+      <header className="pg-masthead">
+        <div className="pg-masthead__left">
+          <div className="pg-wordmark">
+            Puls<span className="pg-wordmark__dot"/>o
+          </div>
+          <div className="pg-masthead__sep"/>
+          <div className="pg-masthead__issue">
+            Issue 01 · <b>The 2026 World Cup</b>
+          </div>
         </div>
-      )}
-
-      {!loading && error && (
-        <div className="pg-center">
-          <span style={{ color: 'var(--pg-text-muted)', fontSize: 12 }}>
-            Could not load markets
-          </span>
+        <div className="pg-masthead__right">
+          <span className="pg-live-dot"/>
+          <span>28 days to kickoff</span>
+          <span className="pg-masthead__dot-sep">·</span>
+          <span>15 markets · 29 edges</span>
+          <div className="pg-masthead__auth">
+            <PasswordlessAuthWidget />
+          </div>
         </div>
-      )}
+      </header>
 
-      {ready && (
-        <ForceGraph2D
-          ref={fgRef as React.MutableRefObject<ForceGraphMethods>}
-          width={dims.w}
-          height={dims.h}
-          graphData={fgData}
-          backgroundColor={BG_COLOR}
-          nodeId="id"
-          nodeCanvasObject={paintNode}
-          nodeCanvasObjectMode={() => 'replace'}
-          nodePointerAreaPaint={paintNodeArea}
-          linkColor={getLinkColor}
-          linkWidth={getLinkWidth}
-          linkCanvasObject={paintLink}
-          linkCanvasObjectMode={() => 'after'}
-          linkPointerAreaPaint={paintLinkArea}
-          onNodeHover={handleNodeHover}
-          onLinkHover={handleLinkHover}
-          onNodeClick={handleNodeClick}
-          onEngineStop={handleEngineStop}
-          d3AlphaDecay={FORCE.alphaDecay}
-          d3VelocityDecay={FORCE.velocityDecay}
-          enableNodeDrag={false}
-          warmupTicks={150}
-          cooldownTicks={Infinity}
-          enableZoomInteraction
-          enablePanInteraction
-        />
-      )}
+      {/* ── Canvas ── */}
+      <div className="pg-canvas-wrap">
+        {/* Subtle grid texture */}
+        <div className="pg-canvas-grid" style={{ zIndex: 2 }}/>
 
-      {/* HUD — compact top bar */}
-      <div className="pg-hud">
-        <div className="pg-hud__left">
-          <span className="pg-logo">Puls<span>o</span></span>
-          {ready && !hoverNode && !hoverLink && (
-            <div className="pg-cluster-legend">
-              {CLUSTER_LABELS.map((label, i) => (
-                <div key={i} className="pg-cluster-legend__item">
-                  <span
-                    className="pg-cluster-legend__dot"
-                    style={{ background: CLUSTER_COLORS[i] }}
-                  />
-                  <span className="pg-cluster-legend__label">{label}</span>
-                </div>
-              ))}
+        {loading && (
+          <div className="pg-center">
+            <span style={{ color: 'var(--pg-accent)', fontSize: 12, opacity: 0.75 }}>
+              Loading signal map…
+            </span>
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="pg-center">
+            <span style={{ color: 'var(--pg-text-muted)', fontSize: 12 }}>
+              Could not load markets
+            </span>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <GraphSVG
+            graphData={graphData}
+            focusedId={focusedId}
+            filterCluster={filterCluster}
+            hoveredConnId={hoveredConnId}
+            onNodeClick={handleNodeClick}
+            onBackgroundClick={handleBackgroundClick}
+          />
+        )}
+
+        {/* Cluster legend — hidden when focused */}
+        {!loading && !error && !focusedId && (
+          <div className="pg-cluster-legend" style={{ zIndex: 3 }}>
+            {CLUSTER_LABELS.map((label, i) => (
+              <div key={i} className="pg-cluster-legend__item">
+                <span
+                  className="pg-cluster-legend__dot"
+                  style={{ background: DESIGN_COLORS[i] }}
+                />
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Edge-type key — hidden when focused */}
+        {!loading && !error && !focusedId && (
+          <div className="pg-edge-key" style={{ zIndex: 3 }}>
+            <div className="pg-edge-key__title">How to read</div>
+            <div className="pg-edge-key__row">
+              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                <defs>
+                  <marker id="k-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 z" fill="rgba(230,236,247,0.85)"/>
+                  </marker>
+                </defs>
+                <line x1="2" y1="5" x2="36" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6" markerEnd="url(#k-arrow)"/>
+              </svg>
+              <span>Causes</span>
             </div>
-          )}
-        </div>
-        <div className="pg-hud__auth">
-          <PasswordlessAuthWidget />
-        </div>
+            <div className="pg-edge-key__row">
+              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                <line x1="2" y1="5" x2="42" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6"/>
+              </svg>
+              <span>Same driver</span>
+            </div>
+            <div className="pg-edge-key__row">
+              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                <line x1="2" y1="5" x2="42" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6" strokeDasharray="5 4"/>
+              </svg>
+              <span>Spills over</span>
+            </div>
+            <div className="pg-edge-key__row">
+              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                <line x1="2" y1="3" x2="42" y2="3" stroke="rgba(230,236,247,0.7)" strokeWidth="1.4"/>
+                <line x1="2" y1="7" x2="42" y2="7" stroke="rgba(230,236,247,0.45)" strokeWidth="1"/>
+              </svg>
+              <span>Amplifies</span>
+            </div>
+            <div className="pg-edge-key__strengths">
+              <span className="pg-edge-key__strengths-label">Weight</span>
+              <span className="pg-edge-key__bar pg-edge-key__bar--weak"/>
+              <span className="pg-edge-key__bar pg-edge-key__bar--med"/>
+              <span className="pg-edge-key__bar"/>
+            </div>
+          </div>
+        )}
+
+        {/* Map card — shown when a node is focused */}
+        {!loading && !error && focusedId && focusedNode && (
+          <div className="pg-map-card" style={{ zIndex: 4 }}>
+            <div className="pg-map-card__stripe"/>
+            <div className="pg-map-card__header">
+              <div>
+                <div
+                  className="pg-map-card__cluster"
+                  style={{ color: DESIGN_COLORS[focusedNode.group % 4] }}
+                >
+                  <span
+                    className="pg-map-card__cluster-dot"
+                    style={{ background: DESIGN_COLORS[focusedNode.group % 4] }}
+                  />
+                  {CLUSTER_LABELS[focusedNode.group ?? 0]}
+                </div>
+                <h2 className="pg-map-card__title">{focusedNode.title}</h2>
+              </div>
+              <button
+                className="pg-map-card__close"
+                onClick={() => { setFocusedId(null); setHoveredConnId(null); }}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="pg-map-card__section-label">Take a view</div>
+            <div className="pg-map-card__body">
+              <p className="pg-take__prompt">
+                Build your call on this market. <em>Trading coming soon.</em>
+              </p>
+              <div className="pg-take__sides">
+                <button className="pg-take__side pg-take__side--pos">
+                  <span className="pg-take__side-arrow">↑</span>
+                  <span className="pg-take__side-label">Higher</span>
+                  <span className="pg-take__side-sub">Over consensus</span>
+                </button>
+                <button className="pg-take__side pg-take__side--neg">
+                  <span className="pg-take__side-arrow">↓</span>
+                  <span className="pg-take__side-label">Lower</span>
+                  <span className="pg-take__side-sub">Under consensus</span>
+                </button>
+              </div>
+              <p className="pg-take__footer">No positions yet</p>
+
+              {focusedConnections.length > 0 && (
+                <div className="pg-map-card__next">
+                  <div className="pg-map-card__next-head">
+                    <div className="pg-map-card__next-label">Moves with</div>
+                  </div>
+                  <div className="pg-map-card__next-list">
+                    {focusedConnections.slice(0, 3).map(({ node: other, edge }) => (
+                      <div
+                        key={other.id}
+                        className="pg-map-card__next-row"
+                        onMouseEnter={() => setHoveredConnId(other.id)}
+                        onMouseLeave={() => setHoveredConnId(null)}
+                        onClick={() => { setHoveredConnId(null); setFocusedId(other.id); }}
+                      >
+                        <span
+                          className="pg-map-card__next-dot"
+                          style={{ background: DESIGN_COLORS[other.group % 4] }}
+                        />
+                        <div className="pg-map-card__next-text">
+                          <div className="pg-map-card__next-title">{other.title}</div>
+                          <div className="pg-map-card__next-reason">&ldquo;{edge.reason}&rdquo;</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer hint */}
+        {!loading && !error && (
+          <div className="pg-canvas-hint" style={{ zIndex: 3 }}>
+            {focusedId ? (
+              <span><kbd>Esc</kbd> back to cover · click background to close</span>
+            ) : (
+              <span>Hover a market to read · click to open story</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Edge hover tooltip */}
-      {ready && !hoverNode && hoverLink && (() => {
-        const src = typeof hoverLink.source === 'object' ? hoverLink.source as FGNode : null;
-        const tgt = typeof hoverLink.target === 'object' ? hoverLink.target as FGNode : null;
-        if (!src || !tgt || !hoverLink.reason) return null;
-        const srcColor = clusterColor(src.group ?? 0);
-        const tgtColor = clusterColor(tgt.group ?? 0);
-        return (
-          <div className="pg-tooltip pg-tooltip--edge" style={{ position: 'absolute', bottom: 24, left: 24 }}>
-            <p className="pg-tooltip__edge-reason">"{hoverLink.reason}"</p>
-            <hr className="pg-tooltip__divider" />
-            <div className="pg-tooltip__edge-markets">
-              <span className="pg-tooltip__edge-market" style={{ color: srcColor }}>
-                {truncate(src.title, 26)}
-              </span>
-              <span className="pg-tooltip__edge-arrow">↔</span>
-              <span className="pg-tooltip__edge-market" style={{ color: tgtColor }}>
-                {truncate(tgt.title, 26)}
-              </span>
-            </div>
-          </div>
-        );
-      })()}
+      {/* ── Rail ── */}
+      <aside className="pg-rail">
+        <div className="pg-rail__scroll">
+          {focusedId && focusedNode ? (
+            <RailStory
+              focusedNode={focusedNode}
+              focusedConnections={focusedConnections}
+              onClose={() => { setFocusedId(null); setHoveredConnId(null); }}
+              onConnectionClick={(id) => { setHoveredConnId(null); setFocusedId(id); }}
+              onConnectionHover={setHoveredConnId}
+            />
+          ) : (
+            <RailCover
+              filterCluster={filterCluster}
+              onFilterChange={setFilterCluster}
+              onStartTour={() => setFocusedId('129')}
+            />
+          )}
+        </div>
+      </aside>
 
-      {/* Node hover tooltip — bottom of screen */}
-      {ready && hoverNode && (() => {
-        const editorial = getEditorial(hoverNode.marketId);
-        const clusterLabel = CLUSTER_LABELS[hoverNode.group ?? 0];
-        const color = clusterColor(hoverNode.group ?? 0);
-        return (
-          <div
-            className="pg-tooltip"
-            style={{ position: 'absolute', bottom: 24, left: 24 }}
-          >
-            <span
-              className="pg-tooltip__cluster-badge"
-              style={{ borderColor: color, color }}
-            >
-              {clusterLabel}
-            </span>
-            <p className="pg-tooltip__title">{hoverNode.title}</p>
-            {editorial && (
-              <p className="pg-tooltip__explanation">{editorial.hoverExplanation}</p>
-            )}
-            {topConnections.length > 0 && (
-              <>
-                <hr className="pg-tooltip__divider" />
-                <p className="pg-tooltip__links-label">Also moves with</p>
-                {topConnections.map((c, i) => (
-                  <div key={i} className="pg-tooltip__connection">
-                    <span className="pg-tooltip__conn-label">{truncate(c.title, 28)}</span>
-                    {c.reason && (
-                      <span className="pg-tooltip__conn-reason">{truncate(c.reason, 30)}</span>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-            <p className="pg-tooltip__cta">Click to explore this storyline →</p>
-          </div>
-        );
-      })()}
     </div>
   );
 }
