@@ -351,45 +351,47 @@ export function GraphHome() {
           </div>
         )}
 
-        {/* Edge-type key — hidden when focused or during intro */}
+        {/* Edge-type key — collapsed tab bottom-right, expands on hover */}
         {!introOpen && !loading && !error && !focusedId && (
           <div className="pg-edge-key" style={{ zIndex: 3 }}>
             <div className="pg-edge-key__title">How to read</div>
-            <div className="pg-edge-key__row">
-              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
-                <defs>
-                  <marker id="k-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-                    <path d="M0,0 L10,5 L0,10 z" fill="rgba(230,236,247,0.85)"/>
-                  </marker>
-                </defs>
-                <line x1="2" y1="5" x2="36" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6" markerEnd="url(#k-arrow)"/>
-              </svg>
-              <span>Causes</span>
-            </div>
-            <div className="pg-edge-key__row">
-              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
-                <line x1="2" y1="5" x2="42" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6"/>
-              </svg>
-              <span>Same driver</span>
-            </div>
-            <div className="pg-edge-key__row">
-              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
-                <line x1="2" y1="5" x2="42" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6" strokeDasharray="5 4"/>
-              </svg>
-              <span>Spills over</span>
-            </div>
-            <div className="pg-edge-key__row">
-              <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
-                <line x1="2" y1="3" x2="42" y2="3" stroke="rgba(230,236,247,0.7)" strokeWidth="1.4"/>
-                <line x1="2" y1="7" x2="42" y2="7" stroke="rgba(230,236,247,0.45)" strokeWidth="1"/>
-              </svg>
-              <span>Amplifies</span>
-            </div>
-            <div className="pg-edge-key__strengths">
-              <span className="pg-edge-key__strengths-label">Weight</span>
-              <span className="pg-edge-key__bar pg-edge-key__bar--weak"/>
-              <span className="pg-edge-key__bar pg-edge-key__bar--med"/>
-              <span className="pg-edge-key__bar"/>
+            <div className="pg-edge-key__panel">
+              <div className="pg-edge-key__row">
+                <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                  <defs>
+                    <marker id="k-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                      <path d="M0,0 L10,5 L0,10 z" fill="rgba(230,236,247,0.85)"/>
+                    </marker>
+                  </defs>
+                  <line x1="2" y1="5" x2="36" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6" markerEnd="url(#k-arrow)"/>
+                </svg>
+                <span>Causes</span>
+              </div>
+              <div className="pg-edge-key__row">
+                <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                  <line x1="2" y1="5" x2="42" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6"/>
+                </svg>
+                <span>Same driver</span>
+              </div>
+              <div className="pg-edge-key__row">
+                <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                  <line x1="2" y1="5" x2="42" y2="5" stroke="rgba(230,236,247,0.7)" strokeWidth="1.6" strokeDasharray="5 4"/>
+                </svg>
+                <span>Spills over</span>
+              </div>
+              <div className="pg-edge-key__row">
+                <svg className="pg-edge-key__sample" viewBox="0 0 44 10">
+                  <line x1="2" y1="3" x2="42" y2="3" stroke="rgba(230,236,247,0.7)" strokeWidth="1.4"/>
+                  <line x1="2" y1="7" x2="42" y2="7" stroke="rgba(230,236,247,0.45)" strokeWidth="1"/>
+                </svg>
+                <span>Amplifies</span>
+              </div>
+              <div className="pg-edge-key__strengths">
+                <span className="pg-edge-key__strengths-label">Weight</span>
+                <span className="pg-edge-key__bar pg-edge-key__bar--weak"/>
+                <span className="pg-edge-key__bar pg-edge-key__bar--med"/>
+                <span className="pg-edge-key__bar"/>
+              </div>
             </div>
           </div>
         )}
@@ -487,19 +489,23 @@ export function GraphHome() {
       {!introOpen && <aside className="pg-rail">
         <div className="pg-rail__scroll">
           {focusedId && focusedNode ? (
-            <RailStory
-              focusedNode={focusedNode}
-              focusedConnections={focusedConnections}
-              onClose={() => { setFocusedId(null); setHoveredConnId(null); }}
-              onConnectionClick={(id) => { setHoveredConnId(null); setFocusedId(id); }}
-              onConnectionHover={setHoveredConnId}
-            />
+            <div key={focusedId} className="pg-cover-anim">
+              <RailStory
+                focusedNode={focusedNode}
+                focusedConnections={focusedConnections}
+                onClose={() => { setFocusedId(null); setHoveredConnId(null); }}
+                onConnectionClick={(id) => { setHoveredConnId(null); setFocusedId(id); }}
+                onConnectionHover={setHoveredConnId}
+              />
+            </div>
           ) : (
-            <RailCover
-              filterCluster={filterCluster}
-              onFilterChange={setFilterCluster}
-              onStartTour={() => setFocusedId('129')}
-            />
+            <div className="pg-cover-anim">
+              <RailCover
+                filterCluster={filterCluster}
+                onFilterChange={setFilterCluster}
+                onStartTour={() => setFocusedId('129')}
+              />
+            </div>
           )}
         </div>
       </aside>}
