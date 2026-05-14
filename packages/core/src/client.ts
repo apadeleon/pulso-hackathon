@@ -104,8 +104,10 @@ export class FSClient {
   }): Promise<T> {
     await this.ensureAuth();
 
-    // Guest mode: allow GET, block mutations
-    if (!this.token && method !== 'GET') {
+    const isGuestPreviewRequest = method === 'POST' && path.startsWith('/api/views/preview/payout/');
+
+    // Guest mode: allow GET plus read-only payout previews, block authenticated mutations.
+    if (!this.token && method !== 'GET' && !isGuestPreviewRequest) {
       throw new Error('Authentication required. Please sign in to perform this action.');
     }
 

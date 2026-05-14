@@ -50,6 +50,18 @@ describe('FSClient signal forwarding', () => {
     expect(callArgs[1].signal).toBe(controller.signal);
   });
 
+  it('guest mode allows payout preview POST requests', async () => {
+    mockFetchSuccess();
+    const client = makeClient();
+
+    await client.post('/api/views/preview/payout/42', { collateral: 10 });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const callArgs = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(callArgs[1].method).toBe('POST');
+    expect(callArgs[1].headers['Username']).toBe('guest');
+  });
+
   it('get() without signal still constructs URL and params correctly', async () => {
     mockFetchSuccess();
     const client = makeClient();

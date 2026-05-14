@@ -18,7 +18,7 @@ type StrategyAction =
   | { type: 'REMOVE_BY_MARKET'; marketId: number }
   | { type: 'SET_DIRECTION'; marketId: number; direction: Direction }
   | { type: 'SET_COLLATERAL'; marketId: number; collateral: number }
-  | { type: 'SET_BELIEF'; marketId: number; belief: BeliefVector }
+  | { type: 'SET_BELIEF'; marketId: number; belief: BeliefVector | null }
   | { type: 'SET_PAYOUT_PREVIEW'; marketId: number; payoutPreview: PayoutCurve }
   | { type: 'CLEAR' };
 
@@ -46,7 +46,9 @@ function reducer(state: StrategyLeg[], action: StrategyAction): StrategyLeg[] {
         ? { ...l, collateral: action.collateral, payoutPreview: null }
         : l);
     case 'SET_BELIEF':
-      return state.map(l => l.marketId === action.marketId ? { ...l, belief: action.belief } : l);
+      return state.map(l => l.marketId === action.marketId
+        ? { ...l, belief: action.belief, payoutPreview: null }
+        : l);
     case 'SET_PAYOUT_PREVIEW':
       return state.map(l => l.marketId === action.marketId ? { ...l, payoutPreview: action.payoutPreview } : l);
     case 'CLEAR':
@@ -66,7 +68,7 @@ interface StrategyContextValue {
   removeByMarket: (marketId: number) => void;
   setDirection: (marketId: number, direction: Direction) => void;
   setCollateral: (marketId: number, collateral: number) => void;
-  setBelief: (marketId: number, belief: BeliefVector) => void;
+  setBelief: (marketId: number, belief: BeliefVector | null) => void;
   setPayoutPreview: (marketId: number, payoutPreview: PayoutCurve) => void;
   clearCart: () => void;
   hasMarket: (marketId: number) => boolean;
@@ -103,7 +105,7 @@ export function StrategyProvider({ children }: { children: React.ReactNode }) {
     [],
   );
   const setBelief = useCallback(
-    (marketId: number, belief: BeliefVector) => dispatch({ type: 'SET_BELIEF', marketId, belief }),
+    (marketId: number, belief: BeliefVector | null) => dispatch({ type: 'SET_BELIEF', marketId, belief }),
     [],
   );
   const setPayoutPreview = useCallback(

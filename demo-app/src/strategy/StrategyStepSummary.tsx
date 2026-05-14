@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useContext, useEffect } from 'react';
+import { previewPayoutCurve } from '@functionspace/core';
+import type { PayoutCurve } from '@functionspace/core';
+import { FunctionSpaceContext } from '@functionspace/react';
+import type { FSContext } from '@functionspace/react';
 import { useStrategy } from './StrategyContext';
 import { computeCombinedPayout } from './payout';
-import type { PayoutCurve } from '@functionspace/core';
 import type { PreflightResult } from './preflight';
 
 export interface LegResult {
@@ -24,10 +27,40 @@ interface StrategyStepSummaryProps {
 }
 
 export function StrategyStepSummary({ onBack, onClose, onExecute, executing, results, preflight }: StrategyStepSummaryProps) {
-  const { legs } = useStrategy();
+  const ctx = useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
+  const { legs, setPayoutPreview } = useStrategy();
 
-  const readyLegs = legs.filter(l => l.direction && l.payoutPreview);
-  const previewPending = readyLegs.length < legs.filter(l => l.direction).length;
+  useEffect(() => {
+    if (!ctx) return;
+
+    const missingLegs = legs.filter(leg => leg.belief && !leg.payoutPreview && leg.collateral > 0);
+    if (missingLegs.length === 0) return;
+
+    let cancelled = false;
+
+    void Promise.all(missingLegs.map(async (leg) => {
+      try {
+        const curve = await previewPayoutCurve(
+          ctx.client,
+          leg.marketId,
+          leg.belief!,
+          leg.collateral,
+          leg.belief!.length - 2,
+        );
+
+        if (!cancelled) setPayoutPreview(leg.marketId, curve);
+      } catch {
+        // ignore — the summary keeps showing a pending state if the preview fails
+      }
+    }));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ctx, legs, setPayoutPreview]);
+
+  const readyLegs = legs.filter(l => l.belief && l.payoutPreview);
+  const previewPending = legs.some(l => l.belief && !l.payoutPreview);
   const curves: PayoutCurve[] = readyLegs.map(l => l.payoutPreview!);
   const combined = computeCombinedPayout(curves);
   const totalStake = legs.reduce((s, l) => s + l.collateral, 0);
@@ -40,7 +73,6 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
   const successCount = results ? results.filter(r => r.status === 'success').length : 0;
   const allSucceeded = results ? successCount === results.length : false;
 
-  // Post-execution: show positions instead of the pre-bet summary.
   if (results) {
     return (
       <>
@@ -88,10 +120,8 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
     );
   }
 
-  // Pre-execution: show the combined payout preview + execute button.
   return (
     <>
-      {/* Scrollable content */}
       <div className="pg-step-scroll">
         <div className="pg-step-dots">
           {Array.from({ length: legs.length + 1 }).map((_, i) => (
@@ -110,12 +140,12 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
             <div key={leg.marketId} className="pg-summary-leg">
               <span className="pg-summary-leg__title">{leg.title}</span>
               <div className="pg-summary-leg__meta">
-                {leg.direction ? (
-                  <span className={`pg-summary-leg__dir pg-summary-leg__dir--${leg.direction}`}>
-                    {leg.direction === 'higher' ? '↑ Higher' : '↓ Lower'}
+                {leg.belief ? (
+                  <span className="pg-summary-leg__dir pg-summary-leg__dir--belief">
+                    Belief set
                   </span>
                 ) : (
-                  <span className="pg-summary-leg__dir pg-summary-leg__dir--missing">No direction</span>
+                  <span className="pg-summary-leg__dir pg-summary-leg__dir--missing">No belief</span>
                 )}
                 <span className="pg-summary-leg__amount">${leg.collateral}</span>
               </div>
@@ -156,7 +186,6 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
         )}
       </div>
 
-      {/* Pinned nav footer */}
       <div className="pg-step-nav">
         <button className="pg-step-nav__back" onClick={onBack}>← Back</button>
         <button

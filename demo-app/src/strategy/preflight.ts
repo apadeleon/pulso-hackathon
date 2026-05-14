@@ -40,10 +40,10 @@ export function preflight(
   }
 
   for (const leg of legs) {
-    if (!leg.direction || !leg.belief) {
+    if (!leg.belief) {
       blockers.push({
         kind: 'incomplete_leg',
-        message: `${leg.title}: choose Higher or Lower`,
+        message: `${leg.title}: choose your bucket range`,
         legMarketId: leg.marketId,
       });
     }

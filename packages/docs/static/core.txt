@@ -164,7 +164,7 @@ client.setToken(token);
 console.log(`Logged in as ${user.username}, wallet: ${user.walletValue}`);
 ```
 
-**Guest mode.** Omit all credentials. The client sends read-only requests with a `Username: guest` header. Query functions work; `buy()` and `sell()` will throw `"Authentication required"`.
+**Guest mode.** Omit all credentials. The client sends read-only requests with a `Username: guest` header. Query functions and `previewPayoutCurve()` work; authenticated write actions like `buy()` and `sell()` throw `"Authentication required"`.
 
 ```typescript
 import { FSClient, discoverMarkets } from '@functionspace/core';

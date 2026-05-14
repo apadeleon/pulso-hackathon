@@ -132,12 +132,6 @@ describe('preflight', () => {
     expect(r.blockers.find(b => b.kind === 'no_legs')).toBeDefined();
   });
 
-  it('reports incomplete_leg when direction is missing', () => {
-    const r = preflight([makeLeg({ direction: null, belief: null })], true, 1000);
-    expect(r.canExecute).toBe(false);
-    expect(r.blockers.find(b => b.kind === 'incomplete_leg')).toBeDefined();
-  });
-
   it('reports incomplete_leg when belief has not been computed yet', () => {
     const r = preflight([makeLeg({ belief: null })], true, 1000);
     expect(r.canExecute).toBe(false);

@@ -44,7 +44,7 @@ interface FSConfig {
 **Authentication behavior:**
 
 * **With credentials** (`username` + `password` provided): The client auto-authenticates on the first API call that requires a token. If a 401 is received, it clears the token, re-authenticates, and retries the request once.
-* **Guest mode** (no credentials): GET requests go through with a `Username: guest` header. POST/mutation requests throw `"Authentication required. Please sign in to perform this action."`.
+* **Guest mode** (no credentials): GET requests go through with a `Username: guest` header. `previewPayoutCurve()` also works in guest mode even though it uses a POST under the hood. Authenticated write actions such as `buy()` and `sell()` still throw `"Authentication required. Please sign in to perform this action."`.
 * **Manual token**: Call `setToken(token)` if you obtain a token through your own auth flow (e.g., from `loginUser`).
 
 **Example (standalone usage):**
@@ -67,7 +67,6 @@ const { token } = await loginUser(guest, 'trader1', 'secret');
 guest.setToken(token);
 // Now guest is authenticated for mutations
 ```
-
 
 
 

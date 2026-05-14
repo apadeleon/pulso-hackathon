@@ -41,6 +41,7 @@ function usePreviewPayout(
 * When a request is aborted, the `AbortError` is re-thrown but does **not** set the `error` state. The `loading` state is not cleared for aborted requests (the new request takes over).
 * Errors auto-clear after 5 seconds. Call `reset()` to clear immediately.
 * No cache invalidation on success -- previews are read-only.
+* Works in guest mode. The underlying `previewPayoutCurve()` request is treated as read-only even though it uses POST.
 * Throws `"Market data not loaded. Cannot determine numBuckets for validation."` if `useMarket` has not yet loaded market data for this `marketId`.
 * Throws `"usePreviewPayout must be used within FunctionSpaceProvider"` if rendered outside the provider.
 * Debouncing is the caller's responsibility. The hook handles the request and cancellation; the component should debounce calls to `execute` (typically 500ms).

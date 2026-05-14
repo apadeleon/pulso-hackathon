@@ -2124,6 +2124,21 @@ button { font-family: inherit; cursor: pointer; }
   min-height: 16px;
 }
 
+.pg-step-buckets {
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+
+.pg-step-chart .fs-chart-header,
+.pg-step-buckets .fs-bucket-range-header,
+.pg-step-buckets .fs-trade-form {
+  display: none;
+}
+
+.pg-step-buckets .fs-bucket-range {
+  padding: 10px;
+}
+
 /* Step navigation — pinned at bottom of panel */
 .pg-step-nav {
   display: flex;
@@ -2211,6 +2226,7 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 600;
   font-family: var(--pg-font);
 }
+.pg-summary-leg__dir--belief { color: var(--pg-combo-green); }
 .pg-summary-leg__dir--higher { color: var(--pg-combo-green); }
 .pg-summary-leg__dir--lower  { color: var(--pg-accent); }
 .pg-summary-leg__dir--missing { color: #f87171; }
