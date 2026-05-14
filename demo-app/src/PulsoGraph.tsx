@@ -5,6 +5,8 @@ import type { FSThemeInput } from '@functionspace/react';
 
 import { GraphHome } from './screens/GraphHome';
 import { MarketDetail } from './screens/MarketDetail';
+import { StrategyBuilder } from './screens/StrategyBuilder';
+import { StrategyProvider } from './strategy/StrategyContext';
 
 const fsConfig = {
   baseUrl: import.meta.env.VITE_FS_BASE_URL as string,
@@ -26,15 +28,18 @@ const fsTheme: FSThemeInput = {
 export default function PulsoGraph() {
   return (
     <FunctionSpaceProvider config={fsConfig} theme={fsTheme}>
-      <BrowserRouter>
-        <div className="pg-phone">
-          {/* Graph stays mounted so simulation never restarts on back-navigation */}
-          <GraphHome />
-          <Routes>
-            <Route path="/market/:marketId" element={<MarketDetail />} />
-          </Routes>
-        </div>
-      </BrowserRouter>
+      <StrategyProvider>
+        <BrowserRouter>
+          <div className="pg-phone">
+            {/* Graph stays mounted so simulation never restarts on back-navigation */}
+            <GraphHome />
+            <Routes>
+              <Route path="/market/:marketId" element={<MarketDetail />} />
+              <Route path="/strategy" element={<StrategyBuilder />} />
+            </Routes>
+          </div>
+        </BrowserRouter>
+      </StrategyProvider>
     </FunctionSpaceProvider>
   );
 }
