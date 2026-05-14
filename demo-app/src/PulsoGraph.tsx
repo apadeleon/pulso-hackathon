@@ -8,6 +8,9 @@ import { MarketDetail } from './screens/MarketDetail';
 import { StrategyBuilder } from './screens/StrategyBuilder';
 import { StrategyProvider } from './strategy/StrategyContext';
 
+const RouterRoutes = Routes as unknown as React.ComponentType<{ children?: React.ReactNode }>;
+const RouterRoute = Route as unknown as React.ComponentType<{ path: string; element: React.ReactNode }>;
+
 const fsConfig = {
   baseUrl: import.meta.env.VITE_FS_BASE_URL as string,
 };
@@ -33,10 +36,10 @@ export default function PulsoGraph() {
           <div className="pg-phone">
             {/* Graph stays mounted so simulation never restarts on back-navigation */}
             <GraphHome />
-            <Routes>
-              <Route path="/market/:marketId" element={<MarketDetail />} />
-              <Route path="/strategy" element={<StrategyBuilder />} />
-            </Routes>
+            <RouterRoutes>
+              <RouterRoute path="/market/:marketId" element={<MarketDetail />} />
+              <RouterRoute path="/strategy" element={<StrategyBuilder />} />
+            </RouterRoutes>
           </div>
         </BrowserRouter>
       </StrategyProvider>

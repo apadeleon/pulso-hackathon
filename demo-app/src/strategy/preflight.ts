@@ -40,10 +40,10 @@ export function preflight(
   }
 
   for (const leg of legs) {
-    if (!leg.belief) {
+    if (!leg.direction || !leg.belief) {
       blockers.push({
         kind: 'incomplete_leg',
-        message: `${leg.title}: choose your bucket range`,
+        message: `${leg.title}: choose Yes or No`,
         legMarketId: leg.marketId,
       });
     }

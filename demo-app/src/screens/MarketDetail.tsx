@@ -1,10 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useStrategy } from '../strategy/StrategyContext';
+import { MAX_STRATEGY_LEGS, useStrategy } from '../strategy/StrategyContext';
 import {
   MarketCharts,
-  BinaryPanel,
-  BucketTradePanel,
   PositionTable,
   TimeSales,
   PasswordlessAuthWidget,
@@ -82,29 +80,6 @@ function ConsensusCallout({ mean, units, lowerBound, upperBound }: ConsensusCall
   );
 }
 
-// ─── Trade mode switcher ──────────────────────────────────────────────────────
-
-type TradeMode = 'binary' | 'bucket';
-
-interface TradeModeOption {
-  key: TradeMode;
-  label: string;
-  description: string;
-}
-
-const TRADE_MODES: TradeModeOption[] = [
-  {
-    key: 'binary',
-    label: 'Quick call',
-    description: 'Above or below the crowd expectation',
-  },
-  {
-    key: 'bucket',
-    label: 'Pick a zone',
-    description: 'Select the range where you think it lands',
-  },
-];
-
 // ─── MarketDetail ─────────────────────────────────────────────────────────────
 
 export function MarketDetail() {
@@ -119,8 +94,6 @@ export function MarketDetail() {
   const related = useRelatedMarkets(id);
   const { addLeg, removeByMarket, hasMarket, legs } = useStrategy();
   const inCombo = hasMarket(numericId);
-
-  const [tradeMode, setTradeMode] = useState<TradeMode>('binary');
 
   const graphNode = useMemo(
     () => graphData?.nodes.find(n => n.id === id) ?? null,
@@ -212,50 +185,7 @@ export function MarketDetail() {
           />
         </div>
 
-        {/* ── Section 3: Make your call ────────────────────────── */}
-        <div className="pg-section">
-          <p className="pg-section__label">Make your call</p>
-          <div className="pg-trade-tabs">
-            {TRADE_MODES.map(mode => (
-              <button
-                key={mode.key}
-                className={`pg-trade-tab${tradeMode === mode.key ? ' pg-trade-tab--active' : ''}`}
-                onClick={() => setTradeMode(mode.key)}
-              >
-                <span className="pg-trade-tab__name">{mode.label}</span>
-                <span className="pg-trade-tab__desc">{mode.description}</span>
-              </button>
-            ))}
-          </div>
-
-          {tradeMode === 'binary' && (
-            <div className="pg-trade-panel-wrap">
-              <p className="pg-section__hint">
-                The crowd expects {Number.isInteger(consensusMean) ? consensusMean : consensusMean.toFixed(1)}{market.xAxisUnits ? ` ${market.xAxisUnits}` : ''}. Do you agree?
-              </p>
-              <BinaryPanel
-                marketId={numericId}
-                xPoint={{ mode: 'dynamic-mean', allowOverride: true }}
-              />
-            </div>
-          )}
-
-          {tradeMode === 'bucket' && (
-            <div className="pg-trade-panel-wrap">
-              <p className="pg-section__hint">
-                Click the zone where you think this market will settle.
-              </p>
-              <BucketTradePanel
-                marketId={numericId}
-                defaultBucketCount={8}
-                chartHeight={150}
-                maxSelections={2}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* ── Section 4: Why it connects ───────────────────────── */}
+        {/* ── Section 3: Why it connects ───────────────────────── */}
         {graphData && (
           <div className="pg-section">
             <p className="pg-section__label">Why it connects</p>
@@ -278,7 +208,7 @@ export function MarketDetail() {
           </div>
         )}
 
-        {/* ── Section 5: Your activity ─────────────────────────── */}
+        {/* ── Section 4: Your activity ─────────────────────────── */}
         <div className="pg-section">
           <div className="pg-activity-sub">
             <p className="pg-section__label">Recent bets</p>
@@ -300,13 +230,14 @@ export function MarketDetail() {
           </div>
         </div>
 
-        {/* ── Section 6: Combined strategy ─────────────────────── */}
+        {/* ── Section 5: Combined strategy ─────────────────────── */}
         {market && (
           <div className="pg-section">
             <p className="pg-section__label">Combined strategy</p>
             <div className="pg-add-combo">
               <button
                 className={`pg-add-combo__btn${inCombo ? ' pg-add-combo__btn--active' : ''}`}
+                disabled={!inCombo && legs.length >= MAX_STRATEGY_LEGS}
                 onClick={() => {
                   if (inCombo) {
                     removeByMarket(numericId);
@@ -315,7 +246,11 @@ export function MarketDetail() {
                   }
                 }}
               >
-                {inCombo ? '✓ Added to combo — tap to remove' : '+ Add to combined bet'}
+                {inCombo
+                  ? '✓ Added to combo — tap to remove'
+                  : legs.length >= MAX_STRATEGY_LEGS
+                    ? `Max ${MAX_STRATEGY_LEGS} markets selected`
+                    : '+ Add to combined bet'}
               </button>
               {legs.length > 0 && (
                 <a className="pg-add-combo__link" href="/strategy">

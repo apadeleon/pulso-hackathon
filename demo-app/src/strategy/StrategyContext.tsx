@@ -2,6 +2,8 @@ import React, { createContext, useContext, useReducer, useCallback, useMemo } fr
 import type { BeliefVector, PayoutCurve } from '@functionspace/core';
 import type { Direction } from './belief';
 
+export const MAX_STRATEGY_LEGS = 3;
+
 export interface StrategyLeg {
   nodeId: string;
   marketId: number;
@@ -26,6 +28,7 @@ function reducer(state: StrategyLeg[], action: StrategyAction): StrategyLeg[] {
   switch (action.type) {
     case 'ADD':
       if (state.some(l => l.marketId === action.leg.marketId)) return state;
+      if (state.length >= MAX_STRATEGY_LEGS) return state;
       return [...state, {
         ...action.leg,
         direction: null,
