@@ -217,6 +217,7 @@ interface RailStoryProps {
   onClose: () => void;
   onConnectionClick: (id: string) => void;
   onConnectionHover: (id: string | null) => void;
+  onViewDetails: (marketId: number) => void;
 }
 
 function RailStory({
@@ -225,6 +226,7 @@ function RailStory({
   onClose,
   onConnectionClick,
   onConnectionHover,
+  onViewDetails,
 }: RailStoryProps) {
   const editorial = getEditorial(focusedNode.marketId);
   const clusterLabel = CLUSTER_LABELS[focusedNode.group ?? 0];
@@ -294,14 +296,12 @@ function RailStory({
 
       <div className="pg-story__section">
         <div className="pg-story__section-label">Take a view</div>
-        <div className="pg-story__take-prompt">
-          <span className="pg-story__take-prompt-dot"/>
-          <span>
-            Build your call using the{' '}
-            <em>floating card on the map</em>{' '}
-            — then place it solo or add it to your combo.
-          </span>
-        </div>
+        <button
+          className="pg-story__details-btn"
+          onClick={() => onViewDetails(focusedNode.marketId)}
+        >
+          View positions, stats &amp; trades →
+        </button>
       </div>
     </>
   );
@@ -519,8 +519,8 @@ export function GraphHome() {
           </div>
         )}
 
-        {/* Edge-type key — collapsed tab bottom-right, expands on hover */}
-        {!introOpen && !loading && !error && !focusedId && !focusedEdge && (
+        {/* Edge-type key — hidden when a connection is focused or strategy legs occupy the corner */}
+        {!introOpen && !loading && !error && !focusedId && !focusedEdge && legs.length === 0 && (
           <div className="pg-edge-key" style={{ zIndex: 3 }}>
             <div className="pg-edge-key__title">How to read</div>
             <div className="pg-edge-key__panel">
@@ -603,6 +603,7 @@ export function GraphHome() {
                 onClose={() => { setFocusedId(null); setHoveredConnId(null); }}
                 onConnectionClick={(id) => { setHoveredConnId(null); setFocusedId(id); }}
                 onConnectionHover={setHoveredConnId}
+                onViewDetails={(marketId) => navigate(`/market/${marketId}`)}
               />
             </div>
           ) : !focusedEdge ? (
