@@ -413,8 +413,8 @@ export function GraphHome() {
           </div>
         )}
 
-        {/* Edge-type key — collapsed tab bottom-right, expands on hover */}
-        {!introOpen && !loading && !error && !focusedId && (
+        {/* Edge-type key — hidden when the Place bet CTA occupies the same corner */}
+        {!introOpen && !loading && !error && !focusedId && legs.length === 0 && (
           <div className="pg-edge-key" style={{ zIndex: 3 }}>
             <div className="pg-edge-key__title">How to read</div>
             <div className="pg-edge-key__panel">

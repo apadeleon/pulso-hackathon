@@ -47,7 +47,7 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
       <>
         <div className="pg-step-scroll">
           <h2 className="pg-step-title" style={{ marginTop: 8 }}>
-            {allSucceeded ? '🎉 All bets placed' : `${successCount} of ${results.length} bets placed`}
+            {allSucceeded ? 'All bets placed' : `${successCount} of ${results.length} bets placed`}
           </h2>
 
           <div className="pg-exec-results">
