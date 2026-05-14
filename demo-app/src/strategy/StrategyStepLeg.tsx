@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useMarket, usePreviewPayout } from '@functionspace/react';
-import { DistributionChart } from '@functionspace/ui';
+import { ConsensusChart } from '@functionspace/ui';
 import { computeDirectionBelief } from './belief';
 import { useStrategy } from './StrategyContext';
 import type { StrategyLeg } from './StrategyContext';
@@ -77,12 +77,7 @@ export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: 
           </div>
         ) : null}
 
-        {!loading && market && (
-          <div className="pg-step-chart">
-            <DistributionChart marketId={leg.marketId} height={160} />
-          </div>
-        )}
-
+        {/* Direction first — primary action, visible without scrolling */}
         <div className="pg-step-directions">
           <button
             className={`pg-dir-btn${leg.direction === 'lower' ? ' pg-dir-btn--active pg-dir-btn--lower' : ''}`}
@@ -103,6 +98,14 @@ export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: 
             <span className="pg-dir-btn__sub">Above {meanDisplay}</span>
           </button>
         </div>
+
+        {/* Keep the consensus chart below the primary controls so the step opens with
+            the directional choice and amount visible without scrolling. */}
+        {!loading && market && (
+          <div className="pg-step-chart">
+            <ConsensusChart marketId={leg.marketId} height={140} />
+          </div>
+        )}
 
         <div className="pg-step-amount">
           <span className="pg-step-amount__label">Bet amount</span>
