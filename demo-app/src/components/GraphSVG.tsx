@@ -116,6 +116,10 @@ export interface GraphSVGProps {
   filterCluster: number | null;
   hoveredConnId: string | null;
   introStage?: number; // 0=halos, 1=+nodes, 2=+edges, 3+=fully on (default 3)
+  /** Set of node ids currently selected for combined-strategy mode. */
+  selectedIds?: Set<string>;
+  /** When true, the canvas shows a hint banner — visual only. */
+  strategyMode?: boolean;
   onNodeClick: (id: string) => void;
   onBackgroundClick: () => void;
   onNodeHover?: (node: GraphNode | null) => void;
@@ -124,14 +128,9 @@ export interface GraphSVGProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function GraphSVG({
-  graphData,
-  focusedId,
-  filterCluster,
-  hoveredConnId,
-  introStage = 3,
-  onNodeClick,
-  onBackgroundClick,
-  onNodeHover,
+  graphData, focusedId, filterCluster, hoveredConnId, introStage = 3,
+  selectedIds, strategyMode = false,
+  onNodeClick, onBackgroundClick, onNodeHover,
 }: GraphSVGProps) {
   const showNodes = introStage >= 1;
   const showEdges = introStage >= 2;
@@ -230,16 +229,27 @@ export function GraphSVG({
   // ── Derived visibility helpers ──────────────────────────────────────────
   const dimNode = useCallback((n: GraphNode) => {
     if (filterCluster !== null && n.group !== filterCluster) return true;
+    if (selectedIds?.has(n.id)) return false;  // selected stays bright
     if (focusedId) return n.id !== focusedId && !focusedNeighbors?.has(n.id);
     if (hover && hover.id !== n.id && !adj.get(hover.id)?.has(n.id)) return true;
     return false;
-  }, [filterCluster, focusedId, focusedNeighbors, hover, adj]);
+  }, [filterCluster, focusedId, focusedNeighbors, hover, adj, selectedIds]);
 
   const edgeIsActive = useCallback((e: GraphEdge) => {
     if (focusedId) return e.source === focusedId || e.target === focusedId;
     if (hover) return e.source === hover.id || e.target === hover.id;
     return false;
   }, [focusedId, hover]);
+
+  const isSelected = useCallback(
+    (id: string) => !!selectedIds && selectedIds.has(id),
+    [selectedIds],
+  );
+
+  const edgeIsBetweenSelected = useCallback(
+    (e: GraphEdge) => !!selectedIds && selectedIds.has(e.source) && selectedIds.has(e.target),
+    [selectedIds],
+  );
 
   const edgeKey = (a: string, b: string) => a < b ? `${a}|${b}` : `${b}|${a}`;
   const hoveredEdgeKey = hoveredConnId && focusedId
@@ -390,14 +400,19 @@ export function GraphSVG({
             const showLabel = active || isHoveredConn;
             const labelText = e.reason.length > 38 ? e.reason.slice(0, 36) + '…' : e.reason;
 
+            const isBetweenSelected = edgeIsBetweenSelected(e);
+            const finalStroke = isBetweenSelected ? 'var(--pg-combo-green)' : stroke;
+            const finalOpacity = isBetweenSelected ? 0.95 : opacity;
+            const finalSw = isBetweenSelected ? Math.max(sw, 2.4) : sw;
+
             return (
               <g key={i}>
                 <path
                   d={d}
                   fill="none"
-                  stroke={stroke}
-                  strokeWidth={sw}
-                  strokeOpacity={opacity}
+                  stroke={finalStroke}
+                  strokeWidth={finalSw}
+                  strokeOpacity={finalOpacity}
                   strokeDasharray={kind === 'spillover' ? '5 4' : undefined}
                   strokeLinecap="round"
                   markerEnd={kind === 'causal' ? 'url(#arrow)' : undefined}
@@ -408,9 +423,9 @@ export function GraphSVG({
                   <path
                     d={d}
                     fill="none"
-                    stroke={stroke}
-                    strokeWidth={Math.max(sw - 1, 0.5)}
-                    strokeOpacity={opacity * 0.55}
+                    stroke={finalStroke}
+                    strokeWidth={Math.max(finalSw - 1, 0.5)}
+                    strokeOpacity={finalOpacity * 0.55}
                     strokeLinecap="round"
                     transform={`translate(${nx * 3.2}, ${ny * 3.2})`}
                   />
@@ -488,6 +503,38 @@ export function GraphSVG({
                     style={{ pointerEvents: 'none' }}
                   />
                 )}
+                {/* Combo-selected: outer green ring */}
+                {isSelected(n.id) && (
+                  <circle
+                    cx={p.x} cy={p.y} r={r + 9}
+                    fill="none"
+                    stroke="var(--pg-combo-green)"
+                    strokeWidth="2.2"
+                    strokeOpacity="0.95"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )}
+                {/* Combo-selected: ✓ badge top-right */}
+                {isSelected(n.id) && (
+                  <g style={{ pointerEvents: 'none' }}>
+                    <circle
+                      cx={p.x + r + 4} cy={p.y - r - 4} r={7}
+                      fill="var(--pg-combo-green)"
+                      stroke="rgba(7,9,15,0.6)" strokeWidth="1"
+                    />
+                    <text
+                      x={p.x + r + 4} y={p.y - r - 1}
+                      textAnchor="middle"
+                      style={{
+                        fill: '#08110b',
+                        fontFamily: "'Poppins', -apple-system, sans-serif",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        userSelect: 'none',
+                      } as React.CSSProperties}
+                    >✓</text>
+                  </g>
+                )}
                 {/* Core circle */}
                 <circle
                   cx={p.x} cy={p.y} r={r}
@@ -524,6 +571,12 @@ export function GraphSVG({
           })}
         </g>}
       </svg>
+
+      {strategyMode && (
+        <div className="pg-combo-hint">
+          Tap markets to combine them — green ✓ = added · tap again to remove
+        </div>
+      )}
 
       {/* Hover chip — DOM-positioned via viewport coords, not SVG-scaled */}
       {showNodes && hover && !focusedId && (() => {
