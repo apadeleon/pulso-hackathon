@@ -8,7 +8,7 @@ import { CLUSTER_LABELS, getEditorial } from '../graph/editorial';
 import type { GraphNode, GraphEdge } from '../graph/types';
 import { GraphSVG, DESIGN_COLORS } from '../components/GraphSVG';
 import { IntroOverlay } from '../components/IntroOverlay';
-import { useStrategy } from '../strategy/StrategyContext';
+import { MAX_STRATEGY_LEGS, useStrategy } from '../strategy/StrategyContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,6 @@ function RailCover({ filterCluster, onFilterChange, onStartTour }: RailCoverProp
           Puls<span className="pg-cover__logo-dot"/>o
         </div>
         <div className="pg-cover__meta">
-          <span className="pg-cover__meta-issue">Issue 01</span>
           <span className="pg-cover__meta-date">May 13, 2026 · 28 days to kickoff</span>
         </div>
       </div>
@@ -310,7 +309,7 @@ export function GraphHome() {
           </div>
           <div className="pg-masthead__sep"/>
           <div className="pg-masthead__issue">
-            Issue 01 · <b>The 2026 World Cup</b>
+            <b>The 2026 World Cup</b>
           </div>
         </div>
         <div className="pg-masthead__right">
@@ -372,11 +371,11 @@ export function GraphHome() {
             <button
               className={`pg-combo-toggle${strategyMode ? ' pg-combo-toggle--active' : ''}`}
               onClick={handleToggleStrategyMode}
-              title={strategyMode ? 'Exit combo mode' : 'Enter combo mode — tap markets to combine'}
-            >
-              <span className="pg-combo-toggle__dot"/>
-              {strategyMode ? `${legs.length} selected — Done` : 'Combine markets'}
-            </button>
+               title={strategyMode ? 'Exit bet mode' : `Pick markets and place your bet — up to ${MAX_STRATEGY_LEGS} markets`}
+             >
+               <span className="pg-combo-toggle__dot"/>
+               {strategyMode ? `${legs.length}/${MAX_STRATEGY_LEGS} selected — Place bet` : 'Place your bet'}
+             </button>
             {strategyMode && legs.length > 0 && (
               <button
                 className="pg-combo-clear"
@@ -395,7 +394,7 @@ export function GraphHome() {
             onClick={() => navigate('/strategy')}
           >
             <span className="pg-combo-cta__count">{legs.length}</span>
-            Build combined bet →
+            Place bet →
           </button>
         )}
 
@@ -455,83 +454,6 @@ export function GraphHome() {
                 <span className="pg-edge-key__bar pg-edge-key__bar--med"/>
                 <span className="pg-edge-key__bar"/>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Map card — shown when a node is focused, never during intro */}
-        {!introOpen && !loading && !error && focusedId && focusedNode && (
-          <div className="pg-map-card" style={{ zIndex: 4 }}>
-            <div className="pg-map-card__stripe"/>
-            <div className="pg-map-card__header">
-              <div>
-                <div
-                  className="pg-map-card__cluster"
-                  style={{ color: DESIGN_COLORS[focusedNode.group % 4] }}
-                >
-                  <span
-                    className="pg-map-card__cluster-dot"
-                    style={{ background: DESIGN_COLORS[focusedNode.group % 4] }}
-                  />
-                  {CLUSTER_LABELS[focusedNode.group ?? 0]}
-                </div>
-                <h2 className="pg-map-card__title">{focusedNode.title}</h2>
-              </div>
-              <button
-                className="pg-map-card__close"
-                onClick={() => { setFocusedId(null); setHoveredConnId(null); }}
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="pg-map-card__section-label">Take a view</div>
-            <div className="pg-map-card__body">
-              <p className="pg-take__prompt">
-                Build your call on this market. <em>Trading coming soon.</em>
-              </p>
-              <div className="pg-take__sides">
-                <button className="pg-take__side pg-take__side--pos">
-                  <span className="pg-take__side-arrow">↑</span>
-                  <span className="pg-take__side-label">Higher</span>
-                  <span className="pg-take__side-sub">Over consensus</span>
-                </button>
-                <button className="pg-take__side pg-take__side--neg">
-                  <span className="pg-take__side-arrow">↓</span>
-                  <span className="pg-take__side-label">Lower</span>
-                  <span className="pg-take__side-sub">Under consensus</span>
-                </button>
-              </div>
-              <p className="pg-take__footer">No positions yet</p>
-
-              {focusedConnections.length > 0 && (
-                <div className="pg-map-card__next">
-                  <div className="pg-map-card__next-head">
-                    <div className="pg-map-card__next-label">Moves with</div>
-                  </div>
-                  <div className="pg-map-card__next-list">
-                    {focusedConnections.slice(0, 3).map(({ node: other, edge }) => (
-                      <div
-                        key={other.id}
-                        className="pg-map-card__next-row"
-                        onMouseEnter={() => setHoveredConnId(other.id)}
-                        onMouseLeave={() => setHoveredConnId(null)}
-                        onClick={() => { setHoveredConnId(null); setFocusedId(other.id); }}
-                      >
-                        <span
-                          className="pg-map-card__next-dot"
-                          style={{ background: DESIGN_COLORS[other.group % 4] }}
-                        />
-                        <div className="pg-map-card__next-text">
-                          <div className="pg-map-card__next-title">{other.title}</div>
-                          <div className="pg-map-card__next-reason">&ldquo;{edge.reason}&rdquo;</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}

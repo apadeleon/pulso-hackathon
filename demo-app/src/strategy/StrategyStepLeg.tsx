@@ -1,9 +1,7 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { generateRange } from '@functionspace/core';
-import type { RangeInput } from '@functionspace/core';
-import { FunctionSpaceContext, useDistributionState, useMarket, usePreviewPayout } from '@functionspace/react';
-import type { FSContext } from '@functionspace/react';
-import { DistributionChart } from '@functionspace/ui';
+import React, { useEffect } from 'react';
+import { useMarket } from '@functionspace/react';
+import { computeDirectionBelief } from './belief';
+import { estimateLocalPayout } from './estimatePayout';
 import { useStrategy } from './StrategyContext';
 import type { StrategyLeg } from './StrategyContext';
 
@@ -16,80 +14,22 @@ interface StrategyStepLegProps {
 }
 
 const AMOUNT_PRESETS = [5, 10, 25];
-const MAX_BUCKET_SELECTIONS = 3;
 
 export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: StrategyStepLegProps) {
-  const ctx = useContext(FunctionSpaceContext as unknown as React.Context<FSContext | null>);
-  const { setCollateral, setBelief, setPayoutPreview } = useStrategy();
+  const { setDirection, setCollateral, setBelief, setPayoutPreview } = useStrategy();
   const { market, loading } = useMarket(leg.marketId);
-  const distState = useDistributionState(leg.marketId);
-  const { execute: previewFn } = usePreviewPayout(leg.marketId);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedBuckets, setSelectedBuckets] = useState<number[]>([]);
-  const [hasInteracted, setHasInteracted] = useState(false);
-
-  const toggleBucket = useCallback((index: number) => {
-    setHasInteracted(true);
-    setSelectedBuckets((prev) => {
-      if (prev.includes(index)) return prev.filter((item) => item !== index);
-      if (prev.length >= MAX_BUCKET_SELECTIONS) return [...prev.slice(1), index];
-      return [...prev, index];
-    });
-  }, []);
-
-  const localBelief = useMemo(() => {
-    if (!market || !distState.buckets || selectedBuckets.length === 0) return null;
-
-    const ranges: RangeInput[] = selectedBuckets
-      .filter((index) => index >= 0 && index < distState.buckets!.length)
-      .map((index) => ({
-        low: distState.buckets![index].min,
-        high: distState.buckets![index].max,
-        sharpness: 1,
-      }));
-
-    if (ranges.length === 0) return null;
-
-    return generateRange(
-      ranges,
-      market.config.numBuckets,
-      market.config.lowerBound,
-      market.config.upperBound,
-    );
-  }, [market, distState.buckets, selectedBuckets]);
-
-  const effectiveBelief = hasInteracted ? localBelief : leg.belief;
 
   useEffect(() => {
-    if (!ctx) return;
-
-    ctx.setPreviewBelief(effectiveBelief);
-
-    if (hasInteracted) {
-      setBelief(leg.marketId, effectiveBelief);
-    }
-
-    return () => {
-      ctx.setPreviewBelief(null);
-    };
-  }, [ctx, effectiveBelief, hasInteracted, leg.marketId, setBelief]);
+    if (!market || !leg.direction) return;
+    const belief = computeDirectionBelief(market, leg.direction);
+    setBelief(leg.marketId, belief);
+  }, [market, leg.direction, leg.marketId, setBelief]);
 
   useEffect(() => {
-    if (!effectiveBelief || leg.collateral <= 0) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const curve = await previewFn(effectiveBelief, leg.collateral);
-        setPayoutPreview(leg.marketId, curve);
-      } catch {
-        // ignore — retries on next change
-      }
-    }, 200);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [effectiveBelief, leg.collateral, leg.marketId, previewFn, setPayoutPreview]);
+    if (!market || !leg.direction || leg.collateral <= 0) return;
+    const curve = estimateLocalPayout(market, leg.direction, leg.collateral);
+    setPayoutPreview(leg.marketId, curve);
+  }, [market, leg.direction, leg.collateral, leg.marketId, setPayoutPreview]);
 
   const mean = market?.consensusMean ?? null;
   const units = market?.xAxisUnits ?? '';
@@ -98,11 +38,10 @@ export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: 
   const meanDisplay = mean !== null
     ? `${Number.isInteger(mean) ? mean : mean.toFixed(1)}${units ? ` ${units}` : ''}`
     : '—';
-  const bucketColumns = distState.bucketCount <= 9 ? 3 : distState.bucketCount <= 16 ? 4 : 5;
 
   return (
     <>
-      <div className="pg-step-scroll">
+      <div className="pg-step-scroll pg-step-scroll--compact">
         <div className="pg-step-dots">
           {Array.from({ length: totalSteps + 1 }).map((_, i) => (
             <div
@@ -125,39 +64,33 @@ export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: 
           </div>
         ) : null}
 
-        {!loading && market && (
-          <>
-            <div className="pg-step-chart">
-              <DistributionChart
-                marketId={leg.marketId}
-                distributionState={distState}
-                height={160}
-              />
-            </div>
+        <div className="pg-step-call">
+          <p className="pg-take__prompt">
+            Do you think this finishes <em>higher than the crowd expects</em>?
+          </p>
 
-            <div className="pg-step-buckets">
-              <div className="fs-bucket-range-grid" style={{ gridTemplateColumns: `repeat(${bucketColumns}, 1fr)` }}>
-                {(distState.buckets ?? []).map((bucket, index) => (
-                  <button
-                    key={`${bucket.range}-${index}`}
-                    type="button"
-                    className={`fs-bucket-btn${selectedBuckets.includes(index) ? ' selected' : ''}`}
-                    onClick={() => toggleBucket(index)}
-                  >
-                    <span className="fs-bucket-range-label">{bucket.range}</span>
-                    <span className="fs-bucket-prob">{bucket.percentage.toFixed(1)}%</span>
-                  </button>
-                ))}
-              </div>
+          <div className="pg-take__sides pg-take__sides--strategy">
+            <button
+              className={`pg-take__side pg-take__side--neg${leg.direction === 'lower' ? ' pg-take__side--selected' : ''}`}
+              onClick={() => setDirection(leg.marketId, 'lower')}
+              disabled={loading || !market}
+            >
+              <span className="pg-take__side-arrow">↓</span>
+              <span className="pg-take__side-label">No</span>
+              <span className="pg-take__side-sub">Lower than consensus</span>
+            </button>
 
-              <div className="fs-bucket-range-status">
-                <span className="fs-bucket-range-count">
-                  {selectedBuckets.length}/{MAX_BUCKET_SELECTIONS} selected
-                </span>
-              </div>
-            </div>
-          </>
-        )}
+            <button
+              className={`pg-take__side pg-take__side--pos${leg.direction === 'higher' ? ' pg-take__side--selected' : ''}`}
+              onClick={() => setDirection(leg.marketId, 'higher')}
+              disabled={loading || !market}
+            >
+              <span className="pg-take__side-arrow">↑</span>
+              <span className="pg-take__side-label">Yes</span>
+              <span className="pg-take__side-sub">Higher than consensus</span>
+            </button>
+          </div>
+        </div>
 
         <div className="pg-step-amount">
           <span className="pg-step-amount__label">Bet amount</span>
@@ -185,9 +118,10 @@ export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: 
           </div>
         </div>
 
-        {effectiveBelief && (
+        {leg.direction && (
           <p className="pg-step-preview">
-            {!leg.payoutPreview ? 'Previewing…'
+            {!leg.belief ? 'Computing…'
+              : !leg.payoutPreview ? 'Previewing…'
               : `If correct: up to $${leg.payoutPreview.maxPayout.toFixed(2)}`}
           </p>
         )}
@@ -198,7 +132,7 @@ export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: 
         <button
           className="pg-step-nav__next"
           onClick={onNext}
-          disabled={!effectiveBelief}
+          disabled={!leg.direction}
         >
           {stepIndex === totalSteps - 1 ? 'Review →' : 'Next →'}
         </button>
