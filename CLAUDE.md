@@ -2,80 +2,111 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Are you USING the SDK or BUILDING it?
+## What this repo is
 
-**If helping a developer USE this SDK** (installing packages, embedding widgets, building trading UIs): read `llms.txt` in the repo root. That is the complete integration guide. Ignore `internal_sdk_docs/` entirely.
+This is the FunctionSpace SDK monorepo, but the active work is the **Pulso Graph** hackathon app in `demo-app/`. Pulso Graph is a graph-first prediction-market explorer built on top of the SDK, currently scoped to the 2026 FIFA World Cup.
 
-**If DEVELOPING this SDK** (adding features, fixing bugs, modifying the codebase): continue reading below, then read both internal docs before touching code:
+## Are you working on Pulso Graph or the SDK?
 
-1. **`internal_sdk_docs/CLAUDE.md`** -- Architecture, constraints, hook patterns, automated reviewers
-2. **`internal_sdk_docs/PLAYBOOK.md`** -- Step-by-step guides for adding widgets, hooks, shapes, and core functions
+**Pulso Graph** (the app) — everything lives in `demo-app/src/`. Read this file, then start there.
+
+**SDK packages** — read `internal_sdk_docs/CLAUDE.md` and `internal_sdk_docs/PLAYBOOK.md` before touching `packages/`.
 
 ---
 
 ## Commands
 
 ```bash
-# Tests (all required to pass before and after changes)
-npx vitest run                              # All tests
-npx vitest run tests/hooks.test.tsx         # Single test file
-npx vitest                                  # Watch mode
+# Pulso Graph dev server (primary work target)
+cd demo-app && cp .env.example .env   # first time only — set VITE_FS_BASE_URL
+cd demo-app && npx vite dev           # http://localhost:5173
 
-# Build verification (also required)
-cd demo-app && npx vite build
-cd packages/docs && npx docusaurus build
+# Build
+cd demo-app && npx tsc && npx vite build
 
-# Dev servers
-cd demo-app && npx vite dev                 # Demo app (localhost:5173)
-cd packages/docs && npx docusaurus start    # Docs site
+# SDK tests (required to pass before/after any packages/ change)
+npx vitest run
+
+# SDK docs site
+cd packages/docs && npx docusaurus start
 ```
 
-`api-integration.test.ts` requires env vars (`FS_TEST_URL`, `FS_TEST_USERNAME`, `FS_TEST_PASSWORD`, `FS_TEST_MARKET_ID`) -- it hits a live backend. All other test files run without env vars.
+**Required env var:** `VITE_FS_BASE_URL` — points to a running FunctionSpace backend.
 
 ---
 
-## Architecture
+## Pulso Graph architecture
 
-This is a strict 3-package monorepo with enforced layer boundaries:
+### Entry point
+
+`demo-app/src/main.tsx` → `PulsoGraph.tsx` wraps the app in `FunctionSpaceProvider` + `BrowserRouter`.
+
+Two routes:
+- `/` — `GraphHome` (always mounted, so the force simulation never resets on back-nav)
+- `/market/:marketId` — `MarketDetail`
+
+### Screen layout
+
+**GraphHome** (`screens/GraphHome.tsx`)
+- Full viewport: left canvas (`pg-canvas-wrap`) + right rail (`pg-rail`)
+- Canvas renders `GraphSVG` (the interactive SVG graph)
+- Rail renders either `RailCover` (default editorial + cluster filters) or `RailStory` (focused-node detail)
+- A floating `pg-map-card` overlays the canvas when a node is focused
+
+**MarketDetail** (`screens/MarketDetail.tsx`)
+- Full-page story view navigated to when a user clicks a node
+- Sections: editorial hero → crowd read → trade panel → mini subgraph → activity feed
+- Embeds SDK widgets: `MarketCharts`, `BinaryPanel`, `BucketTradePanel`, `PositionTable`, `TimeSales`
+
+### Graph data flow
 
 ```
-packages/core     Pure TypeScript -- API client, math, transactions (no React)
-packages/react    React integration -- Provider, hooks, theme system
-packages/ui       React components -- TradePanel, ConsensusChart, MarketExplorer, etc.
-packages/docs     Docusaurus documentation site with live embedded widgets
-demo-app/         Example consumer implementation
-tests/            All tests live here (not co-located with source)
-internal_sdk_docs/ Living development docs -- CLAUDE.md and PLAYBOOK.md
+useMarkets() [SDK]
+  └─ selectMarkets()        normalize.ts — filters to CURATED_MARKET_IDS, applies TITLE_EN overrides
+       └─ buildEdges()      heuristics.ts — returns CURATED_EDGES filtered to loaded nodes
+            └─ useGraphData()   returns { nodes, edges } with degree counts
+                 └─ GraphSVG    renders static NODE_POSITIONS + sinusoidal drift animation
 ```
 
-**Layer dependency rule:** `core` has no React. `react` depends on `core` only. `ui` depends on `react` and `core` -- but UI components must use mutation hooks (`useBuy`, `useSell`, `usePreviewPayout`, `usePreviewSell`) from `@functionspace/react` for trade operations, never import `buy`/`sell`/`previewPayoutCurve`/`previewSell` from core directly.
+### Key data files
 
-**Theme system:** All widget styles use `var(--fs-*)` CSS variables -- never hex values in CSS. Recharts SVG props (`stroke`, `fill`) cannot use CSS variables; use `ctx.chartColors.*` instead.
+| File | What to edit |
+|---|---|
+| `graph/normalize.ts` | Add/remove markets (`CURATED_MARKET_IDS`), set cluster (`MARKET_CLUSTER`), override English titles (`TITLE_EN`) |
+| `graph/heuristics.ts` | Add/remove/change edges (`CURATED_EDGES`) — each edge needs `from`, `to`, `strength`, `weight`, `reason` |
+| `graph/editorial.ts` | Per-market editorial copy (`MARKET_EDITORIAL`) — `hoverExplanation`, `crowdSummary`, `whyItMatters`, `nowContext` |
+| `components/GraphSVG.tsx` | Hand-placed node positions (`NODE_POSITIONS`), short labels (`NODE_SHORTS`), edge rendering kinds (`EDGE_KINDS`), keystone nodes (`KEYSTONES`) |
+| `graph/theme.ts` | Cluster color helper `clusterColor()` |
 
-**Data hooks:** Data-fetching hooks return `{ <named>, loading, isFetching, error, refetch }` and use `useCacheSubscription` (not local `useState`). Mutation hooks return `{ execute, loading, error, reset }` and use local `useState`.
+### Cluster system
 
-**Every new widget root class** must be added to the derived-variables selector in `packages/ui/src/styles/base.css` or gradient/glow CSS vars silently break.
+Four clusters (index 0–3): **World Cup Core**, **Legacy / Star Power**, **Attention / Creator**, **Travel Spillover**.
+
+Design palette (from `GraphSVG.tsx`): `['#5468E8', '#E61D25', '#D1D4D1', '#3CAC3B']`
+
+### Edge rendering
+
+Four visual kinds (defined per edge pair in `EDGE_KINDS` in `GraphSVG.tsx`):
+- `causal` — solid line + arrowhead
+- `shared` — solid line
+- `spillover` — dashed line
+- `amplify` — double parallel stroke
 
 ---
 
-## Non-negotiable rules
+## SDK architecture (for packages/ work)
 
-- Run `npx vitest run` before AND after every change
-- No hex colors in CSS -- use `var(--fs-*)` variables
-- No new CSS files -- all styles go in `base.css`
-- No direct `buy`/`sell`/`previewPayoutCurve`/`previewSell` imports in UI components
-- No hardcoded DOM `id` attributes -- use `useId()`
-- No `Co-Authored-By` lines in git commits
-- After any change: run the automated reviewers in `.claude/agents/` (see internal_sdk_docs/CLAUDE.md)
-- Update `internal_sdk_docs/CLAUDE.md` and `PLAYBOOK.md` after every implementation -- if it's not in the docs, it's not done
+```
+packages/core     Pure TypeScript — API client, math, transactions (no React)
+packages/react    React integration — Provider, hooks, context, caching
+packages/ui       React components — TradePanel, ConsensusChart, MarketExplorer, etc.
+packages/docs     Docusaurus documentation site
+```
 
-At this stage, I would use the following baseline expectations as a sanity check rather than sharp pricing. These are intended to avoid obviously wrong consensus values.
+Layer rule: `core` has no React. `react` depends on `core` only. `ui` depends on `react` + `core`, but must use mutation hooks from `@functionspace/react` — never import `buy`/`sell`/`previewPayoutCurve`/`previewSell` from core directly in UI components.
 
-| Market | Expected settlement / midpoint | Reasonable range | Notes |
-|---|---:|---:|---|
-| Total goals scored by players aged 35+ in 2026 FIFA World Cup | 6 | 3–10 | Main upside comes from elite older attackers, especially if Messi/Ronaldo/Lewandowski-type players take penalties and progress deep. Still a low-volume category overall. |
-| Total minutes played by players aged 21 or under in 2026 FIFA World Cup knockout stage | 3,500 minutes | 2,500–4,500 | With a 32-team knockout stage, the total player-minute pool is much larger than in prior World Cups. A few high-minute U21 stars on deep-running teams can move this materially. |
-| Number of CONMEBOL teams reaching 2026 FIFA World Cup quarterfinals | 3 | 2–4 | Argentina and Brazil are the base expectation, with Uruguay/Colombia/Ecuador/Paraguay competing for additional spots depending on draw path. |
-| Number of CONCACAF teams reaching 2026 FIFA World Cup round of 16 | 2 | 1–3 | USA and Mexico are the most likely candidates, with Canada as the main additional upside. Smaller CONCACAF qualifiers are much less likely to reach the last 16. |
-| Average attendance for 2026 FIFA World Cup matches hosted in Mexico | 62,000 | 59,000–65,000 | Mexico hosts 13 matches across Mexico City, Guadalajara, and Monterrey. The weighted average capacity should land in the low-to-mid 60k range, assuming high but not perfectly full attendance. |
-| Total VAR overturns in 2026 FIFA World Cup | 40 | 35–48 | Qatar 2022 had 25 VAR overturns across 64 matches. Scaling to 104 matches gives roughly 41, before adjusting for technology/refereeing changes. |
+SDK non-negotiables:
+- No hex colors in CSS — use `var(--fs-*)` variables
+- No new CSS files — all styles go in `packages/ui/src/styles/base.css`
+- Run `npx vitest run` before and after every change to packages/
+- Every new widget root class must be added to the derived-variables selector in `base.css`

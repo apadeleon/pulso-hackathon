@@ -406,7 +406,7 @@ export function GraphSVG({
             const finalSw = isBetweenSelected ? Math.max(sw, 2.4) : sw;
 
             return (
-              <g key={i}>
+              <g key={i} style={{ animation: 'pg-edge-enter 0.9s ease both', animationDelay: `${i * 28}ms` }}>
                 <path
                   d={d}
                   fill="none"
@@ -454,7 +454,7 @@ export function GraphSVG({
 
         {/* ── Layer 3: Nodes ── */}
         {showNodes && <g>
-          {graphData.nodes.map(n => {
+          {graphData.nodes.map((n, i) => {
             const p = positions.get(n.id);
             if (!p) return null;
 
@@ -477,7 +477,11 @@ export function GraphSVG({
                   opacity: isDimmed ? 0.22 : 1,
                   transition: 'opacity 0.25s',
                   cursor: 'pointer',
-                }}
+                  animation: 'pg-node-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both',
+                  animationDelay: `${i * 50}ms`,
+                  transformBox: 'fill-box',
+                  transformOrigin: 'center',
+                } as React.CSSProperties}
                 onMouseEnter={(e) => handleNodeEnter(n, e)}
                 onMouseMove={handleNodeMove}
                 onMouseLeave={handleNodeLeave}

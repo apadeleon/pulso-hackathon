@@ -437,23 +437,22 @@ button { font-family: inherit; cursor: pointer; }
   /* color is set inline; box-shadow below adds the glow */
 }
 
-/* ─── Edge-type key — canvas top-right ────────────────────────────────────── */
+/* ─── Edge-type key — collapsed tab bottom-right, expands upward on hover ── */
 .pg-edge-key {
   position: absolute;
-  top: 18px;
+  bottom: 18px;
   right: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 14px 16px;
-  background: rgba(12, 18, 38, 0.78);
+  padding: 8px 14px;
+  background: rgba(12, 18, 38, 0.82);
   border: 1px solid var(--pg-border);
   border-radius: 8px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   z-index: 3;
-  pointer-events: none;
+  pointer-events: auto;
   max-width: 220px;
+  cursor: default;
+  user-select: none;
 }
 
 .pg-edge-key__title {
@@ -463,7 +462,30 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--pg-text-2);
-  margin-bottom: 4px;
+}
+
+/* Expandable panel — hidden by default, slides up on hover */
+.pg-edge-key__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    max-height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity    0.22s ease,
+    transform  0.22s ease,
+    margin-top 0.22s ease;
+  margin-top: 0;
+}
+
+.pg-edge-key:hover .pg-edge-key__panel {
+  max-height: 200px;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: 10px;
 }
 
 .pg-edge-key__row {
@@ -884,6 +906,7 @@ button { font-family: inherit; cursor: pointer; }
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  animation: pg-rail-slide-in 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Vertical brand bar on left edge */
@@ -1723,6 +1746,57 @@ button { font-family: inherit; cursor: pointer; }
 
 .pg-connections--compact { gap: 6px; }
 .pg-connections--compact .pg-connection-card { padding: 10px 12px; }
+
+/* ─── Carousel content cross-fade ───────────────────────────────────────── */
+@keyframes pg-slide-content-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pg-slide-content-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-12px); }
+}
+.pg-intro-content-in {
+  animation: pg-slide-content-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.pg-intro-content-out {
+  animation: pg-slide-content-out 0.22s ease both;
+  pointer-events: none;
+}
+
+/* ─── Rail slide-in from right ───────────────────────────────────────────── */
+@keyframes pg-rail-slide-in {
+  from { transform: translateX(36px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ─── Rail content cascade ───────────────────────────────────────────────── */
+@keyframes pg-fade-up-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pg-cover-anim > * {
+  animation: pg-fade-up-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.pg-cover-anim > *:nth-child(1) { animation-delay: 0.06s; }
+.pg-cover-anim > *:nth-child(2) { animation-delay: 0.12s; }
+.pg-cover-anim > *:nth-child(3) { animation-delay: 0.18s; }
+.pg-cover-anim > *:nth-child(4) { animation-delay: 0.24s; }
+.pg-cover-anim > *:nth-child(5) { animation-delay: 0.30s; }
+.pg-cover-anim > *:nth-child(6) { animation-delay: 0.36s; }
+.pg-cover-anim > *:nth-child(7) { animation-delay: 0.42s; }
+.pg-cover-anim > *:nth-child(8) { animation-delay: 0.48s; }
+.pg-cover-anim > *:nth-child(9) { animation-delay: 0.54s; }
+
+/* ─── Graph entrance animations ─────────────────────────────────────────── */
+@keyframes pg-node-enter {
+  from { opacity: 0; transform: scale(0.2); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes pg-edge-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
 /* ─── Scrollbar reset ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }

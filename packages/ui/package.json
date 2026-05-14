@@ -9,8 +9,8 @@
     "recharts": "^2.10.0"
   },
   "dependencies": {
-    "@functionspace/core": "*",
-    "@functionspace/react": "*",
+    "@functionspace/core": "workspace:*",
+    "@functionspace/react": "workspace:*",
     "rc-slider": "^11.1.9"
   }
 }

@@ -25,8 +25,12 @@ interface Props {
 
 export function IntroOverlay({ onStageChange, onDone }: Props) {
   const [stage, setStage] = useState(0);
+  // displayStage lags behind stage during cross-fade
+  const [displayStage, setDisplayStage] = useState(0);
+  const [transitionOut, setTransitionOut] = useState(false);
   const [fading, setFading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep stable refs so timer callbacks always read the latest values
   const onStageChangeRef = useRef(onStageChange);
@@ -38,6 +42,18 @@ export function IntroOverlay({ onStageChange, onDone }: Props) {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     timerRef.current = null;
   };
+
+  // Cross-fade: when stage advances, animate out → swap content → animate in
+  useEffect(() => {
+    if (stage === displayStage) return;
+    setTransitionOut(true);
+    transRef.current = setTimeout(() => {
+      setDisplayStage(stage);
+      setTransitionOut(false);
+    }, 220);
+    return () => { if (transRef.current) clearTimeout(transRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
 
   const done = () => {
     clearTimer();
@@ -77,7 +93,7 @@ export function IntroOverlay({ onStageChange, onDone }: Props) {
   };
 
   const isLast = stage >= SLIDES.length - 1;
-  const current = SLIDES[Math.min(stage, SLIDES.length - 1)];
+  const current = SLIDES[Math.min(displayStage, SLIDES.length - 1)];
 
   return (
     <div className="pg-intro-overlay" data-fading={fading ? 'true' : 'false'}>
@@ -86,14 +102,22 @@ export function IntroOverlay({ onStageChange, onDone }: Props) {
         style={{
           opacity: fading ? 0 : 1,
           transform: fading ? 'translateY(-8px)' : 'translateY(0)',
+          transition: 'opacity 0.5s ease, transform 0.5s ease',
         }}
       >
-        {current.eyebrow && (
-          <div className="pg-intro-card__eyebrow">{current.eyebrow}</div>
-        )}
-        <h1 className="pg-intro-card__title">{current.title}</h1>
-        <p className="pg-intro-card__body">{current.body}</p>
+        {/* Content cross-fades on each stage change */}
+        <div
+          key={displayStage}
+          className={transitionOut ? 'pg-intro-content-out' : 'pg-intro-content-in'}
+        >
+          {current.eyebrow && (
+            <div className="pg-intro-card__eyebrow">{current.eyebrow}</div>
+          )}
+          <h1 className="pg-intro-card__title">{current.title}</h1>
+          <p className="pg-intro-card__body">{current.body}</p>
+        </div>
 
+        {/* Pips and actions track stage directly — no transition delay */}
         <div className="pg-intro-card__progress">
           {SLIDES.map((_, i) => (
             <div
