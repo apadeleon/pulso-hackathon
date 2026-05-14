@@ -144,6 +144,7 @@ export function StrategyBuilder() {
           ) : (
             <StrategyStepSummary
               onBack={() => setCurrentStep(Math.max(summaryStep - 1, 0))}
+              onClose={handleClose}
               onExecute={handleExecute}
               executing={executing}
               results={results}
