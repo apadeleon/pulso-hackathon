@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { MAX_STRATEGY_LEGS, useStrategy } from '../strategy/StrategyContext';
 import {
   MarketCharts,
+  MarketStats,
   PositionTable,
   TimeSales,
   PasswordlessAuthWidget,
@@ -163,6 +164,11 @@ export function MarketDetail() {
           ) : (
             <p className="pg-hero__why">{clusterDesc}</p>
           )}
+        </div>
+
+        {/* ── Section: Market stats ────────────────────────────── */}
+        <div className="pg-section pg-section--stats">
+          <MarketStats marketId={numericId} />
         </div>
 
         {/* ── Section 2: Crowd read ────────────────────────────── */}

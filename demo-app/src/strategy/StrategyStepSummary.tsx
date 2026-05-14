@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { PayoutCurve } from '@functionspace/core';
 import { useStrategy } from './StrategyContext';
 import { computeCombinedPayout } from './payout';
@@ -25,6 +26,7 @@ interface StrategyStepSummaryProps {
 
 export function StrategyStepSummary({ onBack, onClose, onExecute, executing, results, preflight }: StrategyStepSummaryProps) {
   const { legs } = useStrategy();
+  const navigate = useNavigate();
 
   const readyLegs = legs.filter(l => l.direction && l.payoutPreview);
   const previewPending = legs.some(l => l.direction && !l.payoutPreview);
@@ -72,6 +74,12 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
                   {r.status === 'skipped' && (
                     <div className="pg-exec-result__detail">Skipped — earlier bet failed</div>
                   )}
+                  <button
+                    className="pg-exec-result__detail-link"
+                    onClick={() => { onClose(); navigate(`/market/${r.marketId}`); }}
+                  >
+                    View positions &amp; stats →
+                  </button>
                 </div>
               </div>
             ))}

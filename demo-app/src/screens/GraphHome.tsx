@@ -122,6 +122,7 @@ interface RailStoryProps {
   onClose: () => void;
   onConnectionClick: (id: string) => void;
   onConnectionHover: (id: string | null) => void;
+  onViewDetails: (marketId: number) => void;
 }
 
 function RailStory({
@@ -130,6 +131,7 @@ function RailStory({
   onClose,
   onConnectionClick,
   onConnectionHover,
+  onViewDetails,
 }: RailStoryProps) {
   const editorial = getEditorial(focusedNode.marketId);
   const clusterLabel = CLUSTER_LABELS[focusedNode.group ?? 0];
@@ -199,14 +201,12 @@ function RailStory({
 
       <div className="pg-story__section">
         <div className="pg-story__section-label">Take a view</div>
-        <div className="pg-story__take-prompt">
-          <span className="pg-story__take-prompt-dot"/>
-          <span>
-            Build your call using the{' '}
-            <em>floating card on the map</em>{' '}
-            — then place it solo or add it to your combo.
-          </span>
-        </div>
+        <button
+          className="pg-story__details-btn"
+          onClick={() => onViewDetails(focusedNode.marketId)}
+        >
+          View positions, stats &amp; trades →
+        </button>
       </div>
     </>
   );
@@ -481,6 +481,7 @@ export function GraphHome() {
                 onClose={() => { setFocusedId(null); setHoveredConnId(null); }}
                 onConnectionClick={(id) => { setHoveredConnId(null); setFocusedId(id); }}
                 onConnectionHover={setHoveredConnId}
+                onViewDetails={(marketId) => navigate(`/market/${marketId}`)}
               />
             </div>
           ) : (
