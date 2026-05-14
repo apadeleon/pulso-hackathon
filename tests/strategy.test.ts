@@ -101,3 +101,98 @@ describe('computeCombinedPayout', () => {
     expect(computeCombinedPayout(curves).worstCase).toBe(13);
   });
 });
+
+import { preflight } from '../demo-app/src/strategy/preflight.ts';
+import { classifyExecutionError } from '../demo-app/src/strategy/errors.ts';
+import type { StrategyLeg } from '../demo-app/src/strategy/StrategyContext.tsx';
+
+function makeLeg(overrides: Partial<StrategyLeg> = {}): StrategyLeg {
+  return {
+    nodeId: '129',
+    marketId: 1,
+    title: 'Test Leg',
+    direction: 'higher',
+    collateral: 10,
+    belief: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05],
+    payoutPreview: null,
+    ...overrides,
+  };
+}
+
+describe('preflight', () => {
+  it('reports not_authenticated when not logged in', () => {
+    const r = preflight([makeLeg()], false, 1000);
+    expect(r.canExecute).toBe(false);
+    expect(r.blockers.find(b => b.kind === 'not_authenticated')).toBeDefined();
+  });
+
+  it('reports no_legs when cart is empty', () => {
+    const r = preflight([], true, 1000);
+    expect(r.canExecute).toBe(false);
+    expect(r.blockers.find(b => b.kind === 'no_legs')).toBeDefined();
+  });
+
+  it('reports incomplete_leg when direction is missing', () => {
+    const r = preflight([makeLeg({ direction: null, belief: null })], true, 1000);
+    expect(r.canExecute).toBe(false);
+    expect(r.blockers.find(b => b.kind === 'incomplete_leg')).toBeDefined();
+  });
+
+  it('reports incomplete_leg when belief has not been computed yet', () => {
+    const r = preflight([makeLeg({ belief: null })], true, 1000);
+    expect(r.canExecute).toBe(false);
+    expect(r.blockers.find(b => b.kind === 'incomplete_leg')).toBeDefined();
+  });
+
+  it('reports invalid_collateral when bet amount is zero', () => {
+    const r = preflight([makeLeg({ collateral: 0 })], true, 1000);
+    expect(r.canExecute).toBe(false);
+    expect(r.blockers.find(b => b.kind === 'invalid_collateral')).toBeDefined();
+  });
+
+  it('reports insufficient_funds when total > walletValue', () => {
+    const legs = [makeLeg({ collateral: 30 }), makeLeg({ marketId: 2, collateral: 30 })];
+    const r = preflight(legs, true, 45);
+    expect(r.canExecute).toBe(false);
+    const insuf = r.blockers.find(b => b.kind === 'insufficient_funds');
+    expect(insuf).toBeDefined();
+    expect(insuf?.shortfall).toBe(15);
+  });
+
+  it('does NOT flag insufficient_funds when walletValue is null (unknown)', () => {
+    const r = preflight([makeLeg({ collateral: 30 })], true, null);
+    expect(r.blockers.find(b => b.kind === 'insufficient_funds')).toBeUndefined();
+  });
+
+  it('canExecute=true when everything is ready and funded', () => {
+    const r = preflight([makeLeg({ collateral: 10 })], true, 100);
+    expect(r.canExecute).toBe(true);
+    expect(r.totalCollateral).toBe(10);
+  });
+});
+
+describe('classifyExecutionError', () => {
+  it('detects insufficient_funds', () => {
+    expect(classifyExecutionError(new Error('API error: Insufficient balance')).kind).toBe('insufficient_funds');
+    expect(classifyExecutionError(new Error('not enough funds')).kind).toBe('insufficient_funds');
+  });
+
+  it('detects not_authenticated', () => {
+    expect(classifyExecutionError(new Error('Authentication required. Please sign in to perform this action.')).kind).toBe('not_authenticated');
+    expect(classifyExecutionError(new Error('Unauthorized')).kind).toBe('not_authenticated');
+  });
+
+  it('detects market_closed', () => {
+    expect(classifyExecutionError(new Error('API error: market is closed')).kind).toBe('market_closed');
+    expect(classifyExecutionError(new Error('Market already resolved')).kind).toBe('market_closed');
+  });
+
+  it('falls back to unknown for unrecognised messages', () => {
+    expect(classifyExecutionError(new Error('Some other thing')).kind).toBe('unknown');
+  });
+
+  it('handles non-Error throwables', () => {
+    expect(classifyExecutionError('string thrown').kind).toBe('unknown');
+    expect(classifyExecutionError(42).kind).toBe('unknown');
+  });
+});
