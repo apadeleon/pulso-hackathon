@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@functionspace/react';
 import { validateUsername, PASSWORD_REQUIRED } from '@functionspace/core';
 import type { UserProfile } from '@functionspace/core';
@@ -378,12 +379,13 @@ export function PasswordlessAuthWidget({
   return (
     <>
       {idleContent}
-      {modalOpen && (
+      {modalOpen && createPortal(
         <div className="fs-auth-modal-backdrop" onClick={closeModal}>
           <div className="fs-auth-modal fs-passwordless-auth" onClick={(e) => e.stopPropagation()}>
             {modalContent}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

@@ -6,7 +6,7 @@ import { PasswordlessAuthWidget } from '@functionspace/ui';
 import { useGraphData } from '../graph/useGraphData';
 import { CLUSTER_LABELS, getEditorial } from '../graph/editorial';
 import type { GraphNode, GraphEdge } from '../graph/types';
-import { GraphSVG, DESIGN_COLORS } from '../components/GraphSVG';
+import { GraphSVG, DESIGN_COLORS, getEdgeKind } from '../components/GraphSVG';
 import { IntroOverlay } from '../components/IntroOverlay';
 import { MAX_STRATEGY_LEGS, useStrategy } from '../strategy/StrategyContext';
 
@@ -108,6 +108,101 @@ function RailCover({ filterCluster, onFilterChange, onStartTour }: RailCoverProp
               {label}
             </button>
           ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Rail edge ────────────────────────────────────────────────────────────────
+
+const EDGE_KIND_LABELS: Record<string, { title: string; description: string }> = {
+  causal:   { title: 'Causes',      description: 'When one moves, the other follows. A direct driver relationship.' },
+  shared:   { title: 'Same driver', description: 'Both markets respond to the same underlying event or force.' },
+  spillover: { title: 'Spills over', description: 'Attention or momentum in one market spills into the other.' },
+  amplify:  { title: 'Amplifies',   description: 'These markets reinforce each other — movement in one magnifies the other.' },
+};
+
+interface RailEdgeProps {
+  edge: GraphEdge;
+  sourceNode: GraphNode;
+  targetNode: GraphNode;
+  onClose: () => void;
+  onNodeClick: (id: string) => void;
+}
+
+function RailEdge({ edge, sourceNode, targetNode, onClose, onNodeClick }: RailEdgeProps) {
+  const kind = getEdgeKind(edge.source, edge.target);
+  const kindInfo = EDGE_KIND_LABELS[kind];
+  const srcColor = DESIGN_COLORS[sourceNode.group % 4];
+  const tgtColor = DESIGN_COLORS[targetNode.group % 4];
+  const srcCluster = ['World Cup Core', 'Legacy / Star Power', 'Attention / Creator', 'Travel Spillover'][sourceNode.group] ?? '';
+  const tgtCluster = ['World Cup Core', 'Legacy / Star Power', 'Attention / Creator', 'Travel Spillover'][targetNode.group] ?? '';
+
+  return (
+    <>
+      <div className="pg-story__header">
+        <div className="pg-story__breadcrumb">
+          <span>Pulso</span>
+          <span className="pg-story__breadcrumb-sep">/</span>
+          <span style={{ color: 'var(--pg-text-2)' }}>Connection</span>
+        </div>
+        <button className="pg-story__close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+
+      <div className="pg-edge-kind-badge">
+        <span className="pg-edge-kind-badge__kind">{kindInfo.title}</span>
+        <p className="pg-edge-kind-badge__desc">{kindInfo.description}</p>
+      </div>
+
+      <div className="pg-edge-reason">
+        &ldquo;{edge.reason}&rdquo;
+      </div>
+
+      <div className="pg-story__section">
+        <div className="pg-story__section-label">Why this connection exists</div>
+        <p className="pg-story__body">{edge.detail}</p>
+      </div>
+
+      <div className="pg-story__section">
+        <div className="pg-story__section-label">Connection strength</div>
+        <div className="pg-edge-strength">
+          <div className={`pg-edge-strength__bar pg-edge-strength__bar--${edge.strength}`}/>
+          <span className="pg-edge-strength__label">{edge.strength.charAt(0).toUpperCase() + edge.strength.slice(1)}</span>
+        </div>
+      </div>
+
+      <div className="pg-story__section">
+        <div className="pg-story__section-label">Connected markets</div>
+        <div className="pg-edge-endpoints">
+          <button
+            className="pg-edge-endpoint"
+            onClick={() => onNodeClick(sourceNode.id)}
+          >
+            <div className="pg-edge-endpoint__cluster" style={{ color: srcColor }}>
+              <span className="pg-edge-endpoint__dot" style={{ background: srcColor }}/>
+              {srcCluster}
+            </div>
+            <p className="pg-edge-endpoint__title">{sourceNode.title}</p>
+            <span className="pg-edge-endpoint__cta">Read story →</span>
+          </button>
+
+          <div className="pg-edge-endpoint__connector">
+            <div className="pg-edge-endpoint__line"/>
+            <span className="pg-edge-endpoint__arrow">↕</span>
+          </div>
+
+          <button
+            className="pg-edge-endpoint"
+            onClick={() => onNodeClick(targetNode.id)}
+          >
+            <div className="pg-edge-endpoint__cluster" style={{ color: tgtColor }}>
+              <span className="pg-edge-endpoint__dot" style={{ background: tgtColor }}/>
+              {tgtCluster}
+            </div>
+            <p className="pg-edge-endpoint__title">{targetNode.title}</p>
+            <span className="pg-edge-endpoint__cta">Read story →</span>
+          </button>
         </div>
       </div>
     </>
@@ -222,6 +317,7 @@ export function GraphHome() {
   const effectiveStage = introOpen ? introStage : 3;
 
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [focusedEdge, setFocusedEdge] = useState<GraphEdge | null>(null);
   const [filterCluster, setFilterCluster] = useState<number | null>(null);
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
   const [strategyMode, setStrategyMode] = useState(false);
@@ -240,7 +336,7 @@ export function GraphHome() {
   const handleToggleStrategyMode = useCallback(() => {
     setStrategyMode(m => {
       const next = !m;
-      if (next) { setFocusedId(null); setHoveredConnId(null); }
+      if (next) { setFocusedId(null); setFocusedEdge(null); setHoveredConnId(null); }
       return next;
     });
   }, []);
@@ -276,7 +372,7 @@ export function GraphHome() {
   // ── Keyboard ───────────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setFocusedId(null); setHoveredConnId(null); }
+      if (e.key === 'Escape') { setFocusedId(null); setFocusedEdge(null); setHoveredConnId(null); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -289,12 +385,20 @@ export function GraphHome() {
       toggleByNode({ nodeId: node.id, marketId: node.marketId, title: node.title });
       return;
     }
+    setFocusedEdge(null);
     setHoveredConnId(null);
     setFocusedId(id);
   }, [strategyMode, graphData, toggleByNode]);
 
+  const handleEdgeClick = useCallback((edge: GraphEdge) => {
+    setFocusedId(null);
+    setHoveredConnId(null);
+    setFocusedEdge(edge);
+  }, []);
+
   const handleBackgroundClick = useCallback(() => {
     setFocusedId(null);
+    setFocusedEdge(null);
     setHoveredConnId(null);
   }, []);
 
@@ -353,8 +457,10 @@ export function GraphHome() {
             introStage={effectiveStage}
             selectedIds={selectedNodeIds}
             strategyMode={strategyMode}
+            focusedEdge={focusedEdge}
             onNodeClick={handleNodeClick}
             onBackgroundClick={handleBackgroundClick}
+            onEdgeClick={handleEdgeClick}
           />
         )}
 
@@ -399,7 +505,7 @@ export function GraphHome() {
         )}
 
         {/* Cluster legend — hidden when focused or during intro */}
-        {!introOpen && !loading && !error && !focusedId && (
+        {!introOpen && !loading && !error && !focusedId && !focusedEdge && (
           <div className="pg-cluster-legend" style={{ zIndex: 3 }}>
             {CLUSTER_LABELS.map((label, i) => (
               <div key={i} className="pg-cluster-legend__item">
@@ -414,7 +520,7 @@ export function GraphHome() {
         )}
 
         {/* Edge-type key — collapsed tab bottom-right, expands on hover */}
-        {!introOpen && !loading && !error && !focusedId && (
+        {!introOpen && !loading && !error && !focusedId && !focusedEdge && (
           <div className="pg-edge-key" style={{ zIndex: 3 }}>
             <div className="pg-edge-key__title">How to read</div>
             <div className="pg-edge-key__panel">
@@ -461,10 +567,10 @@ export function GraphHome() {
         {/* Footer hint — hidden during intro */}
         {!introOpen && !loading && !error && (
           <div className="pg-canvas-hint" style={{ zIndex: 3 }}>
-            {focusedId ? (
+            {(focusedId || focusedEdge) ? (
               <span><kbd>Esc</kbd> back to cover · click background to close</span>
             ) : (
-              <span>Hover a market to read · click to open story</span>
+              <span>Hover a market to read · click to open story · click an edge for details</span>
             )}
           </div>
         )}
@@ -473,7 +579,23 @@ export function GraphHome() {
       {/* ── Rail — hidden during intro ── */}
       {!introOpen && <aside className="pg-rail">
         <div className="pg-rail__scroll">
-          {focusedId && focusedNode ? (
+          {focusedEdge && (() => {
+            const srcNode = graphData?.nodes.find(n => n.id === focusedEdge.source);
+            const tgtNode = graphData?.nodes.find(n => n.id === focusedEdge.target);
+            if (!srcNode || !tgtNode) return null;
+            return (
+              <div key={`${focusedEdge.source}|${focusedEdge.target}`} className="pg-cover-anim">
+                <RailEdge
+                  edge={focusedEdge}
+                  sourceNode={srcNode}
+                  targetNode={tgtNode}
+                  onClose={() => setFocusedEdge(null)}
+                  onNodeClick={(id) => { setFocusedEdge(null); setFocusedId(id); }}
+                />
+              </div>
+            );
+          })()}
+          {!focusedEdge && focusedId && focusedNode ? (
             <div key={focusedId} className="pg-cover-anim">
               <RailStory
                 focusedNode={focusedNode}
@@ -483,7 +605,7 @@ export function GraphHome() {
                 onConnectionHover={setHoveredConnId}
               />
             </div>
-          ) : (
+          ) : !focusedEdge ? (
             <div className="pg-cover-anim">
               <RailCover
                 filterCluster={filterCluster}
@@ -491,7 +613,7 @@ export function GraphHome() {
                 onStartTour={() => setFocusedId('129')}
               />
             </div>
-          )}
+          ) : null}
         </div>
       </aside>}
 

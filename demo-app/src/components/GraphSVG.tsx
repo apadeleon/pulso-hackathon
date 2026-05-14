@@ -1,7 +1,8 @@
 import React, {
-  useState, useEffect, useMemo, useCallback,
+  useState, useEffect, useMemo, useCallback, useRef,
 } from 'react';
 import type { GraphNode, GraphEdge, GraphData } from '../graph/types';
+import { useForceLayout } from '../graph/useForceLayout';
 
 // ─── Design constants (from prototype data.js) ────────────────────────────────
 
@@ -22,7 +23,7 @@ const CLUSTER_REGIONS: Record<number, { x: number; y: number }> = {
 // Keystones are larger (r=14 base) and have an inner dot
 const KEYSTONES = new Set(['129', '93', '73']);
 
-// Hand-placed positions from prototype — designed so the layout reads
+// Hand-placed positions — used as force layout seed so the graph starts in a good state
 export const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   '129': { x: 440, y: 300 },
   '249': { x: 280, y: 200 },
@@ -61,7 +62,7 @@ const NODE_SHORTS: Record<string, string> = {
 };
 
 // Edge kinds from prototype — drives arrow / dash / double-stroke rendering
-type EdgeKind = 'causal' | 'shared' | 'spillover' | 'amplify';
+export type EdgeKind = 'causal' | 'shared' | 'spillover' | 'amplify';
 
 // Bidirectional lookup  "srcId|tgtId" → kind
 const EDGE_KINDS: Record<string, EdgeKind> = {
@@ -93,7 +94,7 @@ const EDGE_KINDS: Record<string, EdgeKind> = {
   '227|222': 'spillover','222|227': 'spillover',
 };
 
-function getEdgeKind(src: string, tgt: string): EdgeKind {
+export function getEdgeKind(src: string, tgt: string): EdgeKind {
   return EDGE_KINDS[`${src}|${tgt}`] ?? EDGE_KINDS[`${tgt}|${src}`] ?? 'shared';
 }
 
@@ -120,20 +121,56 @@ export interface GraphSVGProps {
   selectedIds?: Set<string>;
   /** When true, the canvas shows a hint banner — visual only. */
   strategyMode?: boolean;
+  /** Edge currently selected (clicked) — stays highlighted with traveling pulse. */
+  focusedEdge?: GraphEdge | null;
   onNodeClick: (id: string) => void;
   onBackgroundClick: () => void;
   onNodeHover?: (node: GraphNode | null) => void;
+  onEdgeClick?: (edge: GraphEdge) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function GraphSVG({
   graphData, focusedId, filterCluster, hoveredConnId, introStage = 3,
-  selectedIds, strategyMode = false,
-  onNodeClick, onBackgroundClick, onNodeHover,
+  selectedIds, strategyMode = false, focusedEdge,
+  onNodeClick, onBackgroundClick, onNodeHover, onEdgeClick,
 }: GraphSVGProps) {
   const showNodes = introStage >= 1;
   const showEdges = introStage >= 2;
+
+  // ── Force layout ────────────────────────────────────────────────────────
+  const { stablePos, setOverride } = useForceLayout(graphData, NODE_POSITIONS);
+
+  // ── Drag support ────────────────────────────────────────────────────────
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragMovedRef = useRef(false);
+
+  const getSvgCoords = useCallback((e: React.MouseEvent): { x: number; y: number } => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const svgP = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+    return { x: svgP.x, y: svgP.y };
+  }, []);
+
+  const handleSvgMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!draggingId) return;
+    dragMovedRef.current = true;
+    const pos = getSvgCoords(e);
+    setOverride(draggingId, {
+      x: Math.min(Math.max(pos.x, 60), CANVAS_W - 60),
+      y: Math.min(Math.max(pos.y, 60), CANVAS_H - 60),
+    });
+  }, [draggingId, getSvgCoords, setOverride]);
+
+  const handleSvgMouseUp = useCallback(() => {
+    setDraggingId(null);
+  }, []);
+
   // ── Build index: adjacency + degree ─────────────────────────────────────
   const { adj, degree } = useMemo(() => {
     const adj = new Map<string, Set<string>>();
@@ -143,11 +180,11 @@ export function GraphSVG({
       adj.set(n.id, new Set());
       degree.set(n.id, 0);
     }
-    for (const e of graphData.edges) {
-      adj.get(e.source)?.add(e.target);
-      adj.get(e.target)?.add(e.source);
-      degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
-      degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+    for (const edge of graphData.edges) {
+      adj.get(edge.source)?.add(edge.target);
+      adj.get(edge.target)?.add(edge.source);
+      degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+      degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
     }
     return { adj, degree };
   }, [graphData]);
@@ -175,13 +212,21 @@ export function GraphSVG({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Animated positions = anchor + sinusoidal drift
+  // Animated positions = stable anchor + sinusoidal drift
   const positions = useMemo(() => {
     const out = new Map<string, { x: number; y: number }>();
     if (!graphData) return out;
     const t = tick / 18;
     for (const n of graphData.nodes) {
-      const anchor = NODE_POSITIONS[n.id] ?? { x: 500, y: 340 };
+      // Use force layout positions if available, else fall back to hand-placed seed
+      const anchor = stablePos.size > 0
+        ? (stablePos.get(n.id) ?? NODE_POSITIONS[n.id] ?? { x: 500, y: 340 })
+        : (NODE_POSITIONS[n.id] ?? { x: 500, y: 340 });
+      // Suppress drift while this node is being dragged
+      if (n.id === draggingId) {
+        out.set(n.id, anchor);
+        continue;
+      }
       const seed = Number(n.id) % 100;
       out.set(n.id, {
         x: anchor.x + Math.sin(t * 0.25 + seed * 0.7) * 3.2,
@@ -189,26 +234,27 @@ export function GraphSVG({
       });
     }
     return out;
-  }, [graphData, tick]);
+  }, [graphData, tick, stablePos, draggingId]);
 
-  // Cluster halo ellipses — computed from static anchors (don't drift)
+  // Cluster halo ellipses — computed from stable anchors (don't drift)
   const clusterHalos = useMemo(() => {
     if (!graphData) return [];
+    const posSource = stablePos.size > 0 ? stablePos : new Map(Object.entries(NODE_POSITIONS));
     const groups = new Map<number, string[]>();
     for (const n of graphData.nodes) {
       if (!groups.has(n.group)) groups.set(n.group, []);
       groups.get(n.group)!.push(n.id);
     }
     return [...groups.entries()].map(([g, ids]) => {
-      const xs = ids.map(id => NODE_POSITIONS[id]?.x ?? 500);
-      const ys = ids.map(id => NODE_POSITIONS[id]?.y ?? 340);
+      const xs = ids.map(id => posSource.get(id)?.x ?? 500);
+      const ys = ids.map(id => posSource.get(id)?.y ?? 340);
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
       const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
       const rx = Math.max(140, (Math.max(...xs) - Math.min(...xs)) / 2 + 90);
       const ry = Math.max(110, (Math.max(...ys) - Math.min(...ys)) / 2 + 80);
       return { g, cx, cy, rx, ry };
     });
-  }, [graphData]);
+  }, [graphData, stablePos]);
 
   // Neighbors of focused node
   const focusedNeighbors = useMemo(
@@ -218,6 +264,9 @@ export function GraphSVG({
 
   // Local hover state (id + viewport coords for the chip)
   const [hover, setHover] = useState<HoverState | null>(null);
+
+  // Local edge hover state (by edge key "a|b" where a < b)
+  const [localHoveredEdgeKey, setLocalHoveredEdgeKey] = useState<string | null>(null);
 
   // Edges sorted strong-on-top
   const sortedEdges = useMemo(() => {
@@ -235,9 +284,9 @@ export function GraphSVG({
     return false;
   }, [filterCluster, focusedId, focusedNeighbors, hover, adj, selectedIds]);
 
-  const edgeIsActive = useCallback((e: GraphEdge) => {
-    if (focusedId) return e.source === focusedId || e.target === focusedId;
-    if (hover) return e.source === hover.id || e.target === hover.id;
+  const edgeIsActive = useCallback((edge: GraphEdge) => {
+    if (focusedId) return edge.source === focusedId || edge.target === focusedId;
+    if (hover) return edge.source === hover.id || edge.target === hover.id;
     return false;
   }, [focusedId, hover]);
 
@@ -247,13 +296,19 @@ export function GraphSVG({
   );
 
   const edgeIsBetweenSelected = useCallback(
-    (e: GraphEdge) => !!selectedIds && selectedIds.has(e.source) && selectedIds.has(e.target),
+    (edge: GraphEdge) => !!selectedIds && selectedIds.has(edge.source) && selectedIds.has(edge.target),
     [selectedIds],
   );
 
   const edgeKey = (a: string, b: string) => a < b ? `${a}|${b}` : `${b}|${a}`;
-  const hoveredEdgeKey = hoveredConnId && focusedId
+
+  // Hovered-connection key from rail story hover (hoveredConnId prop)
+  const railHoveredEdgeKey = hoveredConnId && focusedId
     ? edgeKey(focusedId, hoveredConnId) : null;
+
+  // Key of the edge that was clicked and is shown in the rail
+  const selectedEdgeKey = focusedEdge
+    ? edgeKey(focusedEdge.source, focusedEdge.target) : null;
 
   // ── Event handlers ─────────────────────────────────────────────────────
   const handleNodeEnter = useCallback((n: GraphNode, e: React.MouseEvent) => {
@@ -282,14 +337,19 @@ export function GraphSVG({
   return (
     <>
       <svg
+        ref={svgRef}
         className="graph-svg"
         viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
         preserveAspectRatio="xMidYMid meet"
         onClick={handleSvgClick}
+        onMouseMove={handleSvgMouseMove}
+        onMouseUp={handleSvgMouseUp}
+        onMouseLeave={handleSvgMouseUp}
         style={{
           position: 'absolute', inset: 0,
           width: '100%', height: '100%',
           display: 'block', overflow: 'visible',
+          cursor: draggingId ? 'grabbing' : 'default',
         }}
       >
         <defs>
@@ -354,15 +414,18 @@ export function GraphSVG({
 
         {/* ── Layer 2: Edges ── */}
         {showEdges && <g>
-          {sortedEdges.map((e, i) => {
-            const a = positions.get(e.source);
-            const b = positions.get(e.target);
+          {sortedEdges.map((edge, i) => {
+            const a = positions.get(edge.source);
+            const b = positions.get(edge.target);
             if (!a || !b) return null;
 
-            const active = edgeIsActive(e);
-            const k = edgeKey(e.source, e.target);
-            const isHoveredConn = hoveredEdgeKey === k;
-            const kind = getEdgeKind(e.source, e.target);
+            const active = edgeIsActive(edge);
+            const k = edgeKey(edge.source, edge.target);
+            const isRailHovered = railHoveredEdgeKey === k;
+            const isLocallyHovered = localHoveredEdgeKey === k;
+            const isSelectedEdge = selectedEdgeKey === k;
+            const isHighlighted = isRailHovered || isLocallyHovered || isSelectedEdge;
+            const kind = getEdgeKind(edge.source, edge.target);
 
             // Bézier midpoint + perpendicular curve
             const dx = b.x - a.x, dy = b.y - a.y;
@@ -373,18 +436,20 @@ export function GraphSVG({
             const cpx = (a.x + b.x) / 2 + nx * curve;
             const cpy = (a.y + b.y) / 2 + ny * curve;
 
-            // Stroke width
-            const sw = isHoveredConn ? 3.6
+            // Stroke width — locally hovered gets a more dramatic grow
+            const sw = isLocallyHovered
+              ? (edge.strength === 'strong' ? 5.5 : edge.strength === 'medium' ? 4.5 : 3.5)
+              : (isRailHovered || isSelectedEdge) ? 3.6
               : active
-                ? (e.strength === 'strong' ? 2.8 : e.strength === 'medium' ? 2.0 : 1.4)
-                : (e.strength === 'strong' ? 1.6 : e.strength === 'medium' ? 1.0 : 0.6);
+                ? (edge.strength === 'strong' ? 2.8 : edge.strength === 'medium' ? 2.0 : 1.4)
+                : (edge.strength === 'strong' ? 1.6 : edge.strength === 'medium' ? 1.0 : 0.6);
 
             // Opacity
             let opacity: number;
-            if (isHoveredConn) {
+            if (isHighlighted) {
               opacity = 1;
             } else if (filterCluster !== null) {
-              const an = nodeById.get(e.source), bn = nodeById.get(e.target);
+              const an = nodeById.get(edge.source), bn = nodeById.get(edge.target);
               opacity = (an?.group === filterCluster || bn?.group === filterCluster)
                 ? (active ? 0.92 : 0.40) : 0.05;
             } else if (focusedId) {
@@ -392,61 +457,131 @@ export function GraphSVG({
             } else if (hover) {
               opacity = active ? 0.85 : 0.14;
             } else {
-              opacity = e.strength === 'strong' ? 0.55 : e.strength === 'medium' ? 0.32 : 0.18;
+              opacity = edge.strength === 'strong' ? 0.55 : edge.strength === 'medium' ? 0.32 : 0.18;
             }
 
-            const stroke = isHoveredConn ? '#ffffff' : 'rgba(230,236,247,0.92)';
+            const stroke = isHighlighted ? '#ffffff' : 'rgba(230,236,247,0.92)';
             const d = `M ${a.x} ${a.y} Q ${cpx} ${cpy} ${b.x} ${b.y}`;
-            const showLabel = active || isHoveredConn;
-            const labelText = e.reason.length > 38 ? e.reason.slice(0, 36) + '…' : e.reason;
+            const showLabel = active || isHighlighted;
+            const labelText = edge.reason.length > 38 ? edge.reason.slice(0, 36) + '…' : edge.reason;
 
-            const isBetweenSelected = edgeIsBetweenSelected(e);
+            const isBetweenSelected = edgeIsBetweenSelected(edge);
             const finalStroke = isBetweenSelected ? 'var(--pg-combo-green)' : stroke;
             const finalOpacity = isBetweenSelected ? 0.95 : opacity;
             const finalSw = isBetweenSelected ? Math.max(sw, 2.4) : sw;
 
             return (
+              // Outer <g>: entrance animation (plays once)
               <g key={i} style={{ animation: 'pg-edge-enter 0.9s ease both', animationDelay: `${i * 28}ms` }}>
-                <path
-                  d={d}
-                  fill="none"
-                  stroke={finalStroke}
-                  strokeWidth={finalSw}
-                  strokeOpacity={finalOpacity}
-                  strokeDasharray={kind === 'spillover' ? '5 4' : undefined}
-                  strokeLinecap="round"
-                  markerEnd={kind === 'causal' ? 'url(#arrow)' : undefined}
-                  style={{ transition: 'stroke-width 0.18s, stroke-opacity 0.18s' }}
-                />
-                {/* Double-stroke for amplify edges */}
-                {kind === 'amplify' && (
+                {/* Inner <g>: pulse animation when locally hovered */}
+                <g style={isLocallyHovered ? { animation: 'pg-edge-pulse 1.3s ease-in-out infinite' } : undefined}>
                   <path
                     d={d}
                     fill="none"
                     stroke={finalStroke}
-                    strokeWidth={Math.max(finalSw - 1, 0.5)}
-                    strokeOpacity={finalOpacity * 0.55}
+                    strokeWidth={finalSw}
+                    strokeOpacity={finalOpacity}
+                    strokeDasharray={kind === 'spillover' ? '5 4' : undefined}
                     strokeLinecap="round"
-                    transform={`translate(${nx * 3.2}, ${ny * 3.2})`}
+                    markerEnd={kind === 'causal' ? 'url(#arrow)' : undefined}
+                    style={{ transition: 'stroke-width 0.15s, stroke-opacity 0.18s', pointerEvents: 'none' }}
                   />
-                )}
-                {/* Edge reason label — shown on active / hovered-conn edges */}
-                {showLabel && (
-                  <text
-                    x={cpx} y={cpy + 3}
-                    textAnchor="middle"
-                    style={{
-                      fill: isHoveredConn ? '#ffffff' : 'rgba(220,230,250,0.78)',
-                      fontFamily: "'Noto Sans', -apple-system, sans-serif",
-                      fontSize: 9.5,
-                      fontWeight: isHoveredConn ? 600 : 400,
-                      pointerEvents: 'none',
-                      userSelect: 'none',
-                    } as React.CSSProperties}
-                  >
-                    {labelText}
-                  </text>
-                )}
+                  {/* Double-stroke for amplify edges */}
+                  {kind === 'amplify' && (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke={finalStroke}
+                      strokeWidth={Math.max(finalSw - 1, 0.5)}
+                      strokeOpacity={finalOpacity * 0.55}
+                      strokeLinecap="round"
+                      transform={`translate(${nx * 3.2}, ${ny * 3.2})`}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+                  {/* Edge reason label — shown on active / highlighted edges */}
+                  {showLabel && (
+                    <text
+                      x={cpx} y={cpy + 3}
+                      textAnchor="middle"
+                      style={{
+                        fill: isHighlighted ? '#ffffff' : 'rgba(220,230,250,0.78)',
+                        fontFamily: "'Noto Sans', -apple-system, sans-serif",
+                        fontSize: 9.5,
+                        fontWeight: isHighlighted ? 600 : 400,
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                      } as React.CSSProperties}
+                    >
+                      {labelText}
+                    </text>
+                  )}
+                  {/* Traveling data-pulses — tick-driven so strokeDashoffset is in
+                      real pixels (CSS animations ignore SVG pathLength). Three
+                      pulses with uneven phase offsets give a random-packet feel. */}
+                  {isSelectedEdge && (() => {
+                    const PULSE_PX = 4;
+                    const SPEED    = 45;   // px per second
+                    const cycle    = len + PULSE_PX;
+                    // Use actual wall-clock time so speed is perfectly constant
+                    const elapsed  = performance.now() / 1000;
+                    const phases   = [0, 0.38, 0.71]; // uneven spacing = random feel
+                    return (
+                      <g style={{ pointerEvents: 'none' }}>
+                        {phases.map((phase, pi) => {
+                          const offset = -((elapsed * SPEED + phase * cycle) % cycle);
+                          return (
+                            <React.Fragment key={pi}>
+                              {/* Outer glow */}
+                              <path
+                                d={d} fill="none"
+                                stroke="rgba(255,255,255,0.18)"
+                                strokeWidth={10}
+                                strokeLinecap="round"
+                                strokeDasharray={`${PULSE_PX + 6} ${cycle * 10}`}
+                                strokeDashoffset={offset - 3}
+                                style={{ filter: 'blur(4px)' } as React.CSSProperties}
+                              />
+                              {/* Mid glow */}
+                              <path
+                                d={d} fill="none"
+                                stroke="rgba(255,255,255,0.45)"
+                                strokeWidth={5}
+                                strokeLinecap="round"
+                                strokeDasharray={`${PULSE_PX + 2} ${cycle * 10}`}
+                                strokeDashoffset={offset - 1}
+                                style={{ filter: 'blur(1.5px)' } as React.CSSProperties}
+                              />
+                              {/* Core bright dot */}
+                              <path
+                                d={d} fill="none"
+                                stroke="rgba(255,255,255,1)"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeDasharray={`${PULSE_PX} ${cycle * 10}`}
+                                strokeDashoffset={offset}
+                              />
+                            </React.Fragment>
+                          );
+                        })}
+                      </g>
+                    );
+                  })()}
+                  {/* Transparent wide hit area — receives mouse events */}
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="rgba(0,0,0,0)"
+                    strokeWidth={16}
+                    style={{ cursor: onEdgeClick ? 'pointer' : 'default', pointerEvents: 'stroke' }}
+                    onMouseEnter={() => setLocalHoveredEdgeKey(k)}
+                    onMouseLeave={() => setLocalHoveredEdgeKey(null)}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      onEdgeClick?.(edge);
+                    }}
+                  />
+                </g>
               </g>
             );
           })}
@@ -476,7 +611,7 @@ export function GraphSVG({
                 style={{
                   opacity: isDimmed ? 0.22 : 1,
                   transition: 'opacity 0.25s',
-                  cursor: 'pointer',
+                  cursor: draggingId === n.id ? 'grabbing' : 'grab',
                   animation: 'pg-node-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both',
                   animationDelay: `${i * 50}ms`,
                   transformBox: 'fill-box',
@@ -485,7 +620,16 @@ export function GraphSVG({
                 onMouseEnter={(e) => handleNodeEnter(n, e)}
                 onMouseMove={handleNodeMove}
                 onMouseLeave={handleNodeLeave}
-                onClick={(e) => { e.stopPropagation(); onNodeClick(n.id); }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  dragMovedRef.current = false;
+                  setDraggingId(n.id);
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (dragMovedRef.current) { dragMovedRef.current = false; return; }
+                  onNodeClick(n.id);
+                }}
               >
                 {/* Glow circle */}
                 <circle

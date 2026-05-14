@@ -31,8 +31,10 @@ export interface GraphEdge {
   strength: EdgeStrength;
   /** Normalised 0–1 score driving visual weight */
   weight: number;
-  /** Human-readable reason for the connection */
+  /** One-line reason shown on the graph edge label */
   reason: string;
+  /** Longer editorial explanation shown in the rail connection detail view */
+  detail: string;
 }
 
 export interface GraphData {
