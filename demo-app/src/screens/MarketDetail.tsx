@@ -1,14 +1,13 @@
 import React, { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MAX_STRATEGY_LEGS, useStrategy } from '../strategy/StrategyContext';
 import {
-  MarketCharts,
   MarketStats,
   PositionTable,
   TimeSales,
   PasswordlessAuthWidget,
 } from '@functionspace/ui';
 import { MiniSubgraph } from '../MiniSubgraph';
+import { ClusterCrowdRead } from '../components/ClusterCrowdRead';
 import { useMarket } from '@functionspace/react';
 import { useGraphData } from '../graph/useGraphData';
 import { CLUSTER_LABELS, CLUSTER_DESCRIPTIONS, getEditorial } from '../graph/editorial';
@@ -93,8 +92,6 @@ export function MarketDetail() {
   const { market, loading, error } = useMarket(numericId);
   const { graphData } = useGraphData();
   const related = useRelatedMarkets(id);
-  const { addLeg, removeByMarket, hasMarket, legs } = useStrategy();
-  const inCombo = hasMarket(numericId);
 
   const graphNode = useMemo(
     () => graphData?.nodes.find(n => n.id === id) ?? null,
@@ -171,7 +168,17 @@ export function MarketDetail() {
           <MarketStats marketId={numericId} />
         </div>
 
-        {/* ── Section 2: Crowd read ────────────────────────────── */}
+        {/* ── Section: Your positions ──────────────────────────── */}
+        <div className="pg-section">
+          <p className="pg-section__label">Your bets</p>
+          <PositionTable
+            marketId={numericId}
+            tabs={['open-orders', 'market-positions']}
+            pageSize={5}
+          />
+        </div>
+
+        {/* ── Section: Crowd read ──────────────────────────────── */}
         <div className="pg-section">
           <p className="pg-section__label">Crowd read</p>
           {editorial && (
@@ -183,15 +190,15 @@ export function MarketDetail() {
             lowerBound={lowerBound}
             upperBound={upperBound}
           />
-          <MarketCharts
-            marketId={numericId}
-            height={200}
-            views={['consensus', 'timeline']}
-            zoomable
-          />
         </div>
 
-        {/* ── Section 3: Why it connects ───────────────────────── */}
+        {/* ── Section: Cluster crowd read ──────────────────────── */}
+        <ClusterCrowdRead
+          clusterIndex={clusterIndex}
+          currentMarketId={numericId}
+        />
+
+        {/* ── Section 4: Why it connects ───────────────────────── */}
         {graphData && (
           <div className="pg-section">
             <p className="pg-section__label">Why it connects</p>
@@ -214,58 +221,18 @@ export function MarketDetail() {
           </div>
         )}
 
-        {/* ── Section 4: Your activity ─────────────────────────── */}
+        {/* ── Section 5: Recent bets ───────────────────────────── */}
         <div className="pg-section">
-          <div className="pg-activity-sub">
-            <p className="pg-section__label">Recent bets</p>
-            <TimeSales
-              marketId={numericId}
-              limit={20}
-              pollInterval={5000}
-              maxHeight="280px"
-              emptyMessage="No bets on this market yet"
-            />
-          </div>
-          <div className="pg-activity-sub">
-            <p className="pg-section__label">Your bets</p>
-            <PositionTable
-              marketId={numericId}
-              tabs={['open-orders', 'market-positions']}
-              pageSize={5}
-            />
-          </div>
+          <p className="pg-section__label">Recent bets</p>
+          <TimeSales
+            marketId={numericId}
+            limit={20}
+            pollInterval={5000}
+            maxHeight="280px"
+            emptyMessage="No bets on this market yet"
+          />
         </div>
 
-        {/* ── Section 5: Combined strategy ─────────────────────── */}
-        {market && (
-          <div className="pg-section">
-            <p className="pg-section__label">Combined strategy</p>
-            <div className="pg-add-combo">
-              <button
-                className={`pg-add-combo__btn${inCombo ? ' pg-add-combo__btn--active' : ''}`}
-                disabled={!inCombo && legs.length >= MAX_STRATEGY_LEGS}
-                onClick={() => {
-                  if (inCombo) {
-                    removeByMarket(numericId);
-                  } else {
-                    addLeg({ nodeId: String(numericId), marketId: numericId, title: market.title });
-                  }
-                }}
-              >
-                {inCombo
-                  ? '✓ Added to combo — tap to remove'
-                  : legs.length >= MAX_STRATEGY_LEGS
-                    ? `Max ${MAX_STRATEGY_LEGS} markets selected`
-                    : '+ Add to combined bet'}
-              </button>
-              {legs.length > 0 && (
-                <a className="pg-add-combo__link" href="/strategy">
-                  View combo ({legs.length} market{legs.length !== 1 ? 's' : ''}) →
-                </a>
-              )}
-            </div>
-          </div>
-        )}
 
       </div>
     </div>

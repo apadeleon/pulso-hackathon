@@ -19,6 +19,10 @@ export const MARKET_CLUSTER: Record<number, number> = {
 
 
 // English title overrides for all curated markets (API returns Spanish titles)
+export function getEnglishTitle(marketId: number, fallback = ''): string {
+  return TITLE_EN[marketId] ?? fallback;
+}
+
 const TITLE_EN: Record<number, string> = {
   129: '2026 FIFA World Cup Peak Viewership Record',
   248: 'Average Attendance at Mexico-Hosted 2026 World Cup Matches',
