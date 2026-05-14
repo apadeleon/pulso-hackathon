@@ -6,6 +6,7 @@ import { useGraphData } from '../graph/useGraphData';
 import { CLUSTER_LABELS, getEditorial } from '../graph/editorial';
 import type { GraphNode, GraphEdge } from '../graph/types';
 import { GraphSVG, DESIGN_COLORS } from '../components/GraphSVG';
+import { IntroOverlay } from '../components/IntroOverlay';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -215,9 +216,18 @@ function RailStory({
 export function GraphHome() {
   const { graphData, loading, error } = useGraphData();
 
+  const [introOpen, setIntroOpen] = useState(true);
+  const [introStage, setIntroStage] = useState(0);
+  const effectiveStage = introOpen ? introStage : 3;
+
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [filterCluster, setFilterCluster] = useState<number | null>(null);
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
+
+  const handleIntroDone = useCallback(() => {
+    setIntroOpen(false);
+    setIntroStage(3);
+  }, []);
 
   // ── Focused node + connections ─────────────────────────────────────────
   const focusedNode = useMemo<GraphNode | null>(() => {
@@ -262,7 +272,7 @@ export function GraphHome() {
   }, []);
 
   return (
-    <div className="pg-shell">
+    <div className={`pg-shell${introOpen ? ' pg-shell--intro' : ''}`}>
 
       {/* ── Masthead ── */}
       <header className="pg-masthead">
@@ -287,7 +297,7 @@ export function GraphHome() {
       </header>
 
       {/* ── Canvas ── */}
-      <div className="pg-canvas-wrap">
+      <div className="pg-canvas-wrap" data-intro={introOpen ? 'true' : 'false'}>
         {/* Subtle grid texture */}
         <div className="pg-canvas-grid" style={{ zIndex: 2 }}/>
 
@@ -313,13 +323,21 @@ export function GraphHome() {
             focusedId={focusedId}
             filterCluster={filterCluster}
             hoveredConnId={hoveredConnId}
+            introStage={effectiveStage}
             onNodeClick={handleNodeClick}
             onBackgroundClick={handleBackgroundClick}
           />
         )}
 
-        {/* Cluster legend — hidden when focused */}
-        {!loading && !error && !focusedId && (
+        {introOpen && (
+          <IntroOverlay
+            onStageChange={setIntroStage}
+            onDone={handleIntroDone}
+          />
+        )}
+
+        {/* Cluster legend — hidden when focused or during intro */}
+        {!introOpen && !loading && !error && !focusedId && (
           <div className="pg-cluster-legend" style={{ zIndex: 3 }}>
             {CLUSTER_LABELS.map((label, i) => (
               <div key={i} className="pg-cluster-legend__item">
@@ -333,8 +351,8 @@ export function GraphHome() {
           </div>
         )}
 
-        {/* Edge-type key — hidden when focused */}
-        {!loading && !error && !focusedId && (
+        {/* Edge-type key — hidden when focused or during intro */}
+        {!introOpen && !loading && !error && !focusedId && (
           <div className="pg-edge-key" style={{ zIndex: 3 }}>
             <div className="pg-edge-key__title">How to read</div>
             <div className="pg-edge-key__row">
@@ -376,8 +394,8 @@ export function GraphHome() {
           </div>
         )}
 
-        {/* Map card — shown when a node is focused */}
-        {!loading && !error && focusedId && focusedNode && (
+        {/* Map card — shown when a node is focused, never during intro */}
+        {!introOpen && !loading && !error && focusedId && focusedNode && (
           <div className="pg-map-card" style={{ zIndex: 4 }}>
             <div className="pg-map-card__stripe"/>
             <div className="pg-map-card__header">
@@ -453,8 +471,8 @@ export function GraphHome() {
           </div>
         )}
 
-        {/* Footer hint */}
-        {!loading && !error && (
+        {/* Footer hint — hidden during intro */}
+        {!introOpen && !loading && !error && (
           <div className="pg-canvas-hint" style={{ zIndex: 3 }}>
             {focusedId ? (
               <span><kbd>Esc</kbd> back to cover · click background to close</span>
@@ -465,8 +483,8 @@ export function GraphHome() {
         )}
       </div>
 
-      {/* ── Rail ── */}
-      <aside className="pg-rail">
+      {/* ── Rail — hidden during intro ── */}
+      {!introOpen && <aside className="pg-rail">
         <div className="pg-rail__scroll">
           {focusedId && focusedNode ? (
             <RailStory
@@ -484,7 +502,7 @@ export function GraphHome() {
             />
           )}
         </div>
-      </aside>
+      </aside>}
 
     </div>
   );

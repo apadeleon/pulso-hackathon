@@ -115,6 +115,7 @@ export interface GraphSVGProps {
   focusedId: string | null;
   filterCluster: number | null;
   hoveredConnId: string | null;
+  introStage?: number; // 0=halos, 1=+nodes, 2=+edges, 3+=fully on (default 3)
   onNodeClick: (id: string) => void;
   onBackgroundClick: () => void;
   onNodeHover?: (node: GraphNode | null) => void;
@@ -127,10 +128,13 @@ export function GraphSVG({
   focusedId,
   filterCluster,
   hoveredConnId,
+  introStage = 3,
   onNodeClick,
   onBackgroundClick,
   onNodeHover,
 }: GraphSVGProps) {
+  const showNodes = introStage >= 1;
+  const showEdges = introStage >= 2;
   // ── Build index: adjacency + degree ─────────────────────────────────────
   const { adj, degree } = useMemo(() => {
     const adj = new Map<string, Set<string>>();
@@ -268,6 +272,7 @@ export function GraphSVG({
   return (
     <>
       <svg
+        className="graph-svg"
         viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
         preserveAspectRatio="xMidYMid meet"
         onClick={handleSvgClick}
@@ -338,7 +343,7 @@ export function GraphSVG({
         </g>
 
         {/* ── Layer 2: Edges ── */}
-        <g>
+        {showEdges && <g>
           {sortedEdges.map((e, i) => {
             const a = positions.get(e.source);
             const b = positions.get(e.target);
@@ -430,10 +435,10 @@ export function GraphSVG({
               </g>
             );
           })}
-        </g>
+        </g>}
 
         {/* ── Layer 3: Nodes ── */}
-        <g>
+        {showNodes && <g>
           {graphData.nodes.map(n => {
             const p = positions.get(n.id);
             if (!p) return null;
@@ -517,11 +522,11 @@ export function GraphSVG({
               </g>
             );
           })}
-        </g>
+        </g>}
       </svg>
 
       {/* Hover chip — DOM-positioned via viewport coords, not SVG-scaled */}
-      {hover && !focusedId && (() => {
+      {showNodes && hover && !focusedId && (() => {
         const n = nodeById.get(hover.id);
         if (!n) return null;
         const color = DESIGN_COLORS[n.group % 4];

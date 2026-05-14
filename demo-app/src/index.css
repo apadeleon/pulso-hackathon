@@ -83,6 +83,165 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden;
 }
 
+/* ─── Intro — shell modifier + overlay ──────────────────────────────────── */
+
+/* Canvas spans full width when intro is open (rail is not rendered) */
+.pg-shell--intro .pg-canvas-wrap {
+  grid-column: 1 / -1;
+}
+
+/* Dim and desaturate the graph SVG during intro */
+.pg-canvas-wrap .graph-svg {
+  transition: opacity 0.8s ease 0.1s, filter 0.6s ease;
+}
+.pg-canvas-wrap[data-intro="true"] .graph-svg {
+  opacity: 0.42;
+  filter: saturate(0.85);
+  transition: opacity 0.6s ease, filter 0.6s ease;
+}
+/* Block node interaction while intro card is up */
+.pg-canvas-wrap[data-intro="true"] .graph-svg {
+  pointer-events: none;
+}
+
+/* Overlay — centered over the full canvas */
+.pg-intro-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 55% 60% at 50% 50%,
+    rgba(6, 9, 20, 0.92) 0%,
+    rgba(6, 9, 20, 0.78) 30%,
+    rgba(6, 9, 20, 0.00) 75%
+  );
+  transition: opacity 0.5s;
+}
+.pg-intro-overlay[data-fading="true"] { opacity: 0; }
+
+/* Card */
+.pg-intro-card {
+  pointer-events: auto;
+  max-width: 560px;
+  width: 100%;
+  padding: 28px 36px 32px;
+  text-align: center;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.pg-intro-card__eyebrow {
+  font-family: var(--pg-font-sans);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--pg-blue-bright);
+  margin-bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pg-intro-card__eyebrow::before,
+.pg-intro-card__eyebrow::after {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: var(--pg-blue-bright);
+  flex-shrink: 0;
+}
+
+.pg-intro-card__title {
+  font-family: var(--pg-font-sans);
+  font-weight: 700;
+  font-size: 38px;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  color: var(--pg-text);
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+
+.pg-intro-card__body {
+  font-family: var(--pg-font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--pg-text-2);
+  margin: 0 auto 28px;
+  max-width: 440px;
+  text-wrap: pretty;
+}
+
+/* Progress pips */
+.pg-intro-card__progress {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 22px;
+}
+.pg-intro-card__pip {
+  width: 32px;
+  height: 2px;
+  background: var(--pg-border-2);
+  border-radius: 1px;
+  overflow: hidden;
+  position: relative;
+}
+.pg-intro-card__pip[data-state="done"] { background: var(--pg-text-3); }
+.pg-intro-card__pip[data-state="active"]::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  background: var(--pg-blue-bright);
+  transform-origin: left center;
+  animation: pg-pip-fill 7s linear forwards;
+}
+@keyframes pg-pip-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Action buttons */
+.pg-intro-card__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.pg-intro-btn {
+  font-family: var(--pg-font-sans);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--pg-border-2);
+  background: transparent;
+  color: var(--pg-text-2);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+.pg-intro-btn:hover {
+  background: var(--pg-bg-elev-2);
+  color: var(--pg-text);
+  border-color: var(--pg-text-3);
+}
+.pg-intro-btn--primary {
+  background: var(--pg-blue-bright);
+  color: #fff;
+  border-color: var(--pg-blue-bright);
+  box-shadow: 0 0 0 1px var(--pg-blue-bright), 0 8px 24px rgba(84, 104, 232, 0.35);
+}
+.pg-intro-btn--primary:hover {
+  background: var(--pg-blue-glow);
+  border-color: var(--pg-blue-glow);
+  color: #fff;
+}
+
 /* ─── Masthead ────────────────────────────────────────────────────────────── */
 .pg-masthead {
   grid-area: masthead;
