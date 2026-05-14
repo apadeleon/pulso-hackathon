@@ -1,12 +1,14 @@
 import React, {
   useState, useMemo, useCallback, useEffect,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PasswordlessAuthWidget } from '@functionspace/ui';
 import { useGraphData } from '../graph/useGraphData';
 import { CLUSTER_LABELS, getEditorial } from '../graph/editorial';
 import type { GraphNode, GraphEdge } from '../graph/types';
 import { GraphSVG, DESIGN_COLORS } from '../components/GraphSVG';
 import { IntroOverlay } from '../components/IntroOverlay';
+import { useStrategy } from '../strategy/StrategyContext';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -223,6 +225,17 @@ export function GraphHome() {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [filterCluster, setFilterCluster] = useState<number | null>(null);
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
+  const [strategyMode, setStrategyMode] = useState(false);
+  const { legs, selectedNodeIds, toggleByNode } = useStrategy();
+  const navigate = useNavigate();
+
+  const handleToggleStrategyMode = useCallback(() => {
+    setStrategyMode(m => {
+      const next = !m;
+      if (next) { setFocusedId(null); setHoveredConnId(null); }
+      return next;
+    });
+  }, []);
 
   const handleIntroDone = useCallback(() => {
     setIntroOpen(false);
@@ -262,9 +275,15 @@ export function GraphHome() {
   }, []);
 
   const handleNodeClick = useCallback((id: string) => {
+    if (strategyMode) {
+      const node = graphData?.nodes.find(n => n.id === id);
+      if (!node) return;
+      toggleByNode({ nodeId: node.id, marketId: node.marketId, title: node.title });
+      return;
+    }
     setHoveredConnId(null);
     setFocusedId(id);
-  }, []);
+  }, [strategyMode, graphData, toggleByNode]);
 
   const handleBackgroundClick = useCallback(() => {
     setFocusedId(null);
@@ -324,6 +343,8 @@ export function GraphHome() {
             filterCluster={filterCluster}
             hoveredConnId={hoveredConnId}
             introStage={effectiveStage}
+            selectedIds={selectedNodeIds}
+            strategyMode={strategyMode}
             onNodeClick={handleNodeClick}
             onBackgroundClick={handleBackgroundClick}
           />
@@ -334,6 +355,29 @@ export function GraphHome() {
             onStageChange={setIntroStage}
             onDone={handleIntroDone}
           />
+        )}
+
+        {/* Strategy mode toggle */}
+        {!introOpen && !loading && !error && (
+          <button
+            className={`pg-combo-toggle${strategyMode ? ' pg-combo-toggle--active' : ''}`}
+            onClick={handleToggleStrategyMode}
+            title={strategyMode ? 'Exit combo mode' : 'Enter combo mode — tap markets to combine'}
+          >
+            <span className="pg-combo-toggle__dot"/>
+            {strategyMode ? `${legs.length} selected — Done` : 'Combine markets'}
+          </button>
+        )}
+
+        {/* Floating "Build combo" CTA */}
+        {!introOpen && !loading && !error && legs.length > 0 && (
+          <button
+            className="pg-combo-cta"
+            onClick={() => navigate('/strategy')}
+          >
+            <span className="pg-combo-cta__count">{legs.length}</span>
+            Build combined bet →
+          </button>
         )}
 
         {/* Cluster legend — hidden when focused or during intro */}

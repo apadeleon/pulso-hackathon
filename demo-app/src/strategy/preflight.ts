@@ -1,4 +1,4 @@
-import type { StrategyLeg } from './StrategyContext.tsx';
+import type { StrategyLeg } from './StrategyContext';
 
 export type PreflightBlockerKind =
   | 'not_authenticated'

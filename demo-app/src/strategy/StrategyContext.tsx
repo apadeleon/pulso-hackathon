@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useMemo } from 'react';
 import type { BeliefVector, PayoutCurve } from '@functionspace/core';
-import type { Direction } from './belief.ts';
+import type { Direction } from './belief';
 
 export interface StrategyLeg {
   nodeId: string;
