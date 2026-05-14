@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useStrategy } from '../strategy/StrategyContext';
 import {
   MarketCharts,
   BinaryPanel,
@@ -116,6 +117,8 @@ export function MarketDetail() {
   const { market, loading, error } = useMarket(numericId);
   const { graphData } = useGraphData();
   const related = useRelatedMarkets(id);
+  const { addLeg, removeByMarket, hasMarket, legs } = useStrategy();
+  const inCombo = hasMarket(numericId);
 
   const [tradeMode, setTradeMode] = useState<TradeMode>('binary');
 
@@ -296,6 +299,32 @@ export function MarketDetail() {
             />
           </div>
         </div>
+
+        {/* ── Section 6: Combined strategy ─────────────────────── */}
+        {market && (
+          <div className="pg-section">
+            <p className="pg-section__label">Combined strategy</p>
+            <div className="pg-add-combo">
+              <button
+                className={`pg-add-combo__btn${inCombo ? ' pg-add-combo__btn--active' : ''}`}
+                onClick={() => {
+                  if (inCombo) {
+                    removeByMarket(numericId);
+                  } else {
+                    addLeg({ nodeId: String(numericId), marketId: numericId, title: market.title });
+                  }
+                }}
+              >
+                {inCombo ? '✓ Added to combo — tap to remove' : '+ Add to combined bet'}
+              </button>
+              {legs.length > 0 && (
+                <a className="pg-add-combo__link" href="/strategy">
+                  View combo ({legs.length} market{legs.length !== 1 ? 's' : ''}) →
+                </a>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
