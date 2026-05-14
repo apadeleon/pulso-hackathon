@@ -229,10 +229,13 @@ export function GraphHome() {
   const { legs, selectedNodeIds, toggleByNode, clearCart } = useStrategy();
   const navigate = useNavigate();
 
-  // When all legs are removed (e.g. after successful execution), exit combine mode
-  // automatically so the graph returns to its normal state.
+  // Exit combine mode only when legs go from >0 to 0 (i.e. after successful execution),
+  // not when entering combine mode with an empty cart.
+  const prevLegsLengthRef = React.useRef(legs.length);
   useEffect(() => {
-    if (legs.length === 0 && strategyMode) setStrategyMode(false);
+    const prev = prevLegsLengthRef.current;
+    prevLegsLengthRef.current = legs.length;
+    if (prev > 0 && legs.length === 0 && strategyMode) setStrategyMode(false);
   }, [legs.length, strategyMode]);
 
   const handleToggleStrategyMode = useCallback(() => {
