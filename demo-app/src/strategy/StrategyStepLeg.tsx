@@ -37,8 +37,10 @@ export function StrategyStepLeg({ leg, stepIndex, totalSteps, onNext, onBack }: 
       } catch {
         // ignore — retries on next change
       }
-    }, 500);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    }, 200);
+    // No cleanup on unmount — let the inflight fetch complete even after the user
+    // navigates to the review step so the summary sees the preview data.
+    // The clearTimeout above cancels any previous timer when params change.
   }, [leg.belief, leg.collateral, leg.marketId, previewFn, setPayoutPreview]);
 
   const mean = market?.consensusMean ?? null;

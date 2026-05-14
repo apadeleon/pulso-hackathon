@@ -26,8 +26,8 @@ interface StrategyStepSummaryProps {
 export function StrategyStepSummary({ onBack, onClose, onExecute, executing, results, preflight }: StrategyStepSummaryProps) {
   const { legs } = useStrategy();
 
-  // Snapshot the pre-execution data so the table stays correct after legs are cleared on success.
   const readyLegs = legs.filter(l => l.direction && l.payoutPreview);
+  const previewPending = readyLegs.length < legs.filter(l => l.direction).length;
   const curves: PayoutCurve[] = readyLegs.map(l => l.payoutPreview!);
   const combined = computeCombinedPayout(curves);
   const totalStake = legs.reduce((s, l) => s + l.collateral, 0);
@@ -127,7 +127,7 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
           <div className="pg-summary-table__row pg-summary-table__row--best">
             <span className="pg-summary-table__label">All correct</span>
             <span className="pg-summary-table__value">
-              {multiplier ? `${multiplier}× → $${combined.bestCase.toFixed(2)}` : '—'}
+              {previewPending ? 'Computing…' : multiplier ? `${multiplier}× → $${combined.bestCase.toFixed(2)}` : '—'}
             </span>
           </div>
           <div className="pg-summary-table__row pg-summary-table__row--neutral">
@@ -137,7 +137,7 @@ export function StrategyStepSummary({ onBack, onClose, onExecute, executing, res
           <div className="pg-summary-table__row pg-summary-table__row--worst">
             <span className="pg-summary-table__label">All wrong</span>
             <span className="pg-summary-table__value">
-              {multiplier ? `−$${netLoss.toFixed(2)}` : '—'}
+              {previewPending ? 'Computing…' : multiplier ? `−$${netLoss.toFixed(2)}` : '—'}
             </span>
           </div>
         </div>

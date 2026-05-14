@@ -226,8 +226,14 @@ export function GraphHome() {
   const [filterCluster, setFilterCluster] = useState<number | null>(null);
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
   const [strategyMode, setStrategyMode] = useState(false);
-  const { legs, selectedNodeIds, toggleByNode } = useStrategy();
+  const { legs, selectedNodeIds, toggleByNode, clearCart } = useStrategy();
   const navigate = useNavigate();
+
+  // When all legs are removed (e.g. after successful execution), exit combine mode
+  // automatically so the graph returns to its normal state.
+  useEffect(() => {
+    if (legs.length === 0 && strategyMode) setStrategyMode(false);
+  }, [legs.length, strategyMode]);
 
   const handleToggleStrategyMode = useCallback(() => {
     setStrategyMode(m => {
@@ -359,14 +365,24 @@ export function GraphHome() {
 
         {/* Strategy mode toggle */}
         {!introOpen && !loading && !error && (
-          <button
-            className={`pg-combo-toggle${strategyMode ? ' pg-combo-toggle--active' : ''}`}
-            onClick={handleToggleStrategyMode}
-            title={strategyMode ? 'Exit combo mode' : 'Enter combo mode — tap markets to combine'}
-          >
-            <span className="pg-combo-toggle__dot"/>
-            {strategyMode ? `${legs.length} selected — Done` : 'Combine markets'}
-          </button>
+          <div className="pg-combo-toolbar">
+            <button
+              className={`pg-combo-toggle${strategyMode ? ' pg-combo-toggle--active' : ''}`}
+              onClick={handleToggleStrategyMode}
+              title={strategyMode ? 'Exit combo mode' : 'Enter combo mode — tap markets to combine'}
+            >
+              <span className="pg-combo-toggle__dot"/>
+              {strategyMode ? `${legs.length} selected — Done` : 'Combine markets'}
+            </button>
+            {strategyMode && legs.length > 0 && (
+              <button
+                className="pg-combo-clear"
+                onClick={() => { clearCart(); setStrategyMode(false); }}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
         )}
 
         {/* Floating "Build combo" CTA */}
