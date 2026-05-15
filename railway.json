@@ -1,11 +1,10 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "pnpm install && cd demo-app && npx vite build"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "node_modules/.bin/serve demo-app/dist -s -l $PORT",
     "healthcheckPath": "/"
   }
 }
