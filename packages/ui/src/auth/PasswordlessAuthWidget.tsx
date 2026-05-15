@@ -80,7 +80,7 @@ export function PasswordlessAuthWidget({
 
     const validation = validateUsername(username);
     if (!validation.valid) {
-      setFormError(validation.error ?? 'Usuario invalido');
+      setFormError(validation.error ?? 'Invalid username');
       return;
     }
 
@@ -90,9 +90,9 @@ export function PasswordlessAuthWidget({
       closeModal();
     } catch (err: unknown) {
       if (err instanceof Error && 'code' in err && (err as Error & { code: string }).code === PASSWORD_REQUIRED) {
-        setFormError('Esta cuenta requiere contrasena. Usa Acceso Admin abajo.');
+        setFormError('This account requires a password. Use Admin Access below.');
       } else {
-        setFormError(err instanceof Error ? err.message : 'No se pudo iniciar sesion');
+        setFormError(err instanceof Error ? err.message : 'Could not sign in');
       }
     }
   }, [username, passwordlessLogin, onLogin, closeModal]);
@@ -102,7 +102,7 @@ export function PasswordlessAuthWidget({
     setFormError(null);
 
     if (!username.trim() || !password) {
-      setFormError('Usuario y contrasena son obligatorios');
+      setFormError('Username and password are required');
       return;
     }
 
@@ -112,7 +112,7 @@ export function PasswordlessAuthWidget({
       clearAdminLogin();
       closeModal();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'No se pudo iniciar sesion');
+      setFormError(err instanceof Error ? err.message : 'Could not sign in');
     }
   }, [username, password, login, onLogin, clearAdminLogin, closeModal]);
 
@@ -122,17 +122,17 @@ export function PasswordlessAuthWidget({
 
     const validation = validateUsername(username);
     if (!validation.valid) {
-      setFormError(validation.error ?? 'Usuario invalido');
+      setFormError(validation.error ?? 'Invalid username');
       return;
     }
 
     if (password.length < 6) {
-      setFormError('La contrasena debe tener al menos 6 caracteres');
+      setFormError('Password must be at least 6 characters');
       return;
     }
 
     if (password !== confirmPassword) {
-      setFormError('Las contrasenas no coinciden');
+      setFormError('Passwords do not match');
       return;
     }
 
@@ -142,7 +142,7 @@ export function PasswordlessAuthWidget({
       onSignup?.(signedUpUser);
       closeModal();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'No se pudo crear la cuenta');
+      setFormError(err instanceof Error ? err.message : 'Could not create account');
     }
   }, [username, password, confirmPassword, accessCode, requireAccessCode, signup, onSignup, closeModal]);
 
@@ -159,13 +159,13 @@ export function PasswordlessAuthWidget({
       <div className="fs-passwordless-auth">
         <div className="fs-auth-user-bar">
           <span className="fs-auth-wallet">
-            ${user.walletValue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${user.walletValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
           <span className="fs-auth-username">
             {user.username}
           </span>
           <button className="fs-auth-signout-btn" onClick={handleLogout}>
-            Salir
+            Sign out
           </button>
         </div>
       </div>
@@ -176,7 +176,7 @@ export function PasswordlessAuthWidget({
   const idleContent = (
     <div className="fs-passwordless-auth">
       <div className="fs-auth-actions" style={{ alignItems: 'center', gap: '0.75rem' }}>
-        <span style={{ color: 'var(--fs-text-secondary)', fontSize: '0.875rem' }}>Inicia sesion para participar</span>
+        <span style={{ color: 'var(--fs-text-secondary)', fontSize: '0.875rem' }}>Sign in to participate</span>
         <button
           className="fs-auth-btn fs-auth-btn-primary"
           onClick={() => {
@@ -185,7 +185,7 @@ export function PasswordlessAuthWidget({
             setView('passwordless');
           }}
         >
-          Entrar / Crear cuenta
+          Sign in / Create account
         </button>
       </div>
     </div>
@@ -197,17 +197,17 @@ export function PasswordlessAuthWidget({
   if (view === 'passwordless') {
     modalContent = (
       <form className="fs-auth-form" onSubmit={handlePasswordlessSubmit}>
-        <h4 className="fs-auth-form-title">Entrar / Crear cuenta</h4>
-        <span className="fs-auth-label-hint">Ingresa o crea una cuenta con el nombre que quieras</span>
+        <h4 className="fs-auth-form-title">Sign in / Create account</h4>
+        <span className="fs-auth-label-hint">Enter or create an account with any username you like</span>
 
         <div className="fs-auth-input-group">
-          <label className="fs-auth-label">Usuario</label>
+          <label className="fs-auth-label">Username</label>
           <input
             className="fs-auth-input"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Escribe tu usuario"
+            placeholder="Enter your username"
             disabled={loading}
             autoComplete="username"
           />
@@ -217,10 +217,10 @@ export function PasswordlessAuthWidget({
 
         <div className="fs-auth-form-footer">
           <button type="submit" className="fs-auth-btn fs-auth-btn-primary" disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar / Crear cuenta'}
+            {loading ? 'Signing in...' : 'Sign in / Create account'}
           </button>
           <button type="button" className="fs-auth-btn fs-auth-btn-secondary" onClick={closeModal} disabled={loading}>
-            Cancelar
+            Cancel
           </button>
         </div>
 
@@ -229,7 +229,7 @@ export function PasswordlessAuthWidget({
           className="fs-auth-mode-link"
           onClick={() => { resetForm(); setView('admin'); }}
         >
-          Acceso Admin
+          Admin Access
         </button>
       </form>
     );
@@ -238,29 +238,29 @@ export function PasswordlessAuthWidget({
   if (view === 'admin') {
     modalContent = (
       <form className="fs-auth-form" onSubmit={handleAdminLogin}>
-        <h4 className="fs-auth-form-title">Acceso Admin</h4>
+        <h4 className="fs-auth-form-title">Admin Access</h4>
 
         <div className="fs-auth-input-group">
-          <label className="fs-auth-label">Usuario</label>
+          <label className="fs-auth-label">Username</label>
           <input
             className="fs-auth-input"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Escribe tu usuario"
+            placeholder="Enter your username"
             disabled={loading}
             autoComplete="username"
           />
         </div>
 
         <div className="fs-auth-input-group">
-          <label className="fs-auth-label">Contrasena</label>
+          <label className="fs-auth-label">Password</label>
           <input
             className="fs-auth-input"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Escribe tu contrasena"
+            placeholder="Enter your password"
             disabled={loading}
             autoComplete="current-password"
           />
@@ -270,10 +270,10 @@ export function PasswordlessAuthWidget({
 
         <div className="fs-auth-form-footer">
           <button type="submit" className="fs-auth-btn fs-auth-btn-primary" disabled={loading}>
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
           <button type="button" className="fs-auth-btn fs-auth-btn-secondary" onClick={closeModal} disabled={loading}>
-            Cancelar
+            Cancel
           </button>
         </div>
 
@@ -282,7 +282,7 @@ export function PasswordlessAuthWidget({
           className="fs-auth-mode-link"
           onClick={() => { resetForm(); setView('passwordless'); }}
         >
-          Volver a entrar / crear cuenta
+          Back to sign in / create account
         </button>
 
         <button
@@ -290,7 +290,7 @@ export function PasswordlessAuthWidget({
           className="fs-auth-mode-link"
           onClick={() => { resetForm(); setView('admin-signup'); }}
         >
-          Crear cuenta admin
+          Create admin account
         </button>
       </form>
     );
@@ -299,42 +299,42 @@ export function PasswordlessAuthWidget({
   if (view === 'admin-signup') {
     modalContent = (
       <form className="fs-auth-form" onSubmit={handleAdminSignup}>
-        <h4 className="fs-auth-form-title">Crear cuenta admin</h4>
+        <h4 className="fs-auth-form-title">Create admin account</h4>
 
         <div className="fs-auth-input-group">
-          <label className="fs-auth-label">Usuario</label>
+          <label className="fs-auth-label">Username</label>
           <input
             className="fs-auth-input"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Elige un usuario"
+            placeholder="Choose a username"
             disabled={loading}
             autoComplete="username"
           />
         </div>
 
         <div className="fs-auth-input-group">
-          <label className="fs-auth-label">Contrasena</label>
+          <label className="fs-auth-label">Password</label>
           <input
             className="fs-auth-input"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimo 6 caracteres"
+            placeholder="Minimum 6 characters"
             disabled={loading}
             autoComplete="new-password"
           />
         </div>
 
         <div className="fs-auth-input-group">
-          <label className="fs-auth-label">Confirmar contrasena</label>
+          <label className="fs-auth-label">Confirm password</label>
           <input
             className="fs-auth-input"
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirma tu contrasena"
+            placeholder="Confirm your password"
             disabled={loading}
             autoComplete="new-password"
           />
@@ -342,13 +342,13 @@ export function PasswordlessAuthWidget({
 
         {requireAccessCode && (
           <div className="fs-auth-input-group">
-            <label className="fs-auth-label">Codigo de acceso</label>
+            <label className="fs-auth-label">Access code</label>
             <input
               className="fs-auth-input"
               type="text"
               value={accessCode}
               onChange={(e) => setAccessCode(e.target.value)}
-              placeholder="Escribe el codigo"
+              placeholder="Enter the code"
               disabled={loading}
             />
           </div>
@@ -358,10 +358,10 @@ export function PasswordlessAuthWidget({
 
         <div className="fs-auth-form-footer">
           <button type="submit" className="fs-auth-btn fs-auth-btn-primary" disabled={loading}>
-            {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+            {loading ? 'Creating account...' : 'Create account'}
           </button>
           <button type="button" className="fs-auth-btn fs-auth-btn-secondary" onClick={closeModal} disabled={loading}>
-            Cancelar
+            Cancel
           </button>
         </div>
 
@@ -370,7 +370,7 @@ export function PasswordlessAuthWidget({
           className="fs-auth-mode-link"
           onClick={() => { resetForm(); setView('admin'); }}
         >
-          Volver a acceso admin
+          Back to admin access
         </button>
       </form>
     );
