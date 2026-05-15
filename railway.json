@@ -5,7 +5,7 @@
     "buildCommand": "pnpm install && cd demo-app && npx vite build"
   },
   "deploy": {
-    "startCommand": "cd demo-app && npx vite preview --host 0.0.0.0 --port $PORT",
+    "startCommand": "node_modules/.bin/serve demo-app/dist -s -l $PORT",
     "healthcheckPath": "/"
   }
 }
