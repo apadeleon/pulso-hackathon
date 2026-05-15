@@ -521,14 +521,16 @@ export function GraphSVG({
                       pulses with uneven phase offsets give a random-packet feel. */}
                   {isSelectedEdge && (() => {
                     const PULSE_PX = 4;
-                    const SPEED    = 45;   // px per second
+                    const SPEED    = 22;   // px per second — slow, steady drift
                     const cycle    = len + PULSE_PX;
-                    // Use actual wall-clock time so speed is perfectly constant
+                    // Wall-clock time keeps speed perfectly constant across all edges
                     const elapsed  = performance.now() / 1000;
-                    const phases   = [0, 0.38, 0.71]; // uneven spacing = random feel
+                    // Even thirds so all 3 pulses share the same rhythm
+                    const phases   = [0, 1/3, 2/3];
                     return (
                       <g style={{ pointerEvents: 'none' }}>
                         {phases.map((phase, pi) => {
+                          // Always positive advance — pulses only travel source→target
                           const offset = -((elapsed * SPEED + phase * cycle) % cycle);
                           return (
                             <React.Fragment key={pi}>

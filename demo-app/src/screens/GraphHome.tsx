@@ -2,7 +2,13 @@ import React, {
   useState, useMemo, useCallback, useEffect,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PasswordlessAuthWidget } from '@functionspace/ui';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid,
+} from 'recharts';
+import { PasswordlessAuthWidget, MarketCharts } from '@functionspace/ui';
+import { useMarket, useMarketHistory } from '@functionspace/react';
+import { transformHistoryToFanChart } from '@functionspace/core';
 import { useGraphData } from '../graph/useGraphData';
 import { CLUSTER_LABELS, getEditorial } from '../graph/editorial';
 import type { GraphNode, GraphEdge } from '../graph/types';
@@ -114,6 +120,154 @@ function RailCover({ filterCluster, onFilterChange, onStartTour }: RailCoverProp
   );
 }
 
+// ─── Dual market mean chart ───────────────────────────────────────────────────
+
+interface DualMarketMeanChartProps {
+  srcMarketId: number;
+  tgtMarketId: number;
+  srcColor: string;
+  tgtColor: string;
+  highlighted: 'source' | 'target' | null;
+}
+
+function useMeanSeries(marketId: number) {
+  const { market } = useMarket(marketId);
+  const { history, loading } = useMarketHistory(marketId);
+
+  const points = useMemo(() => {
+    if (!history?.snapshots?.length || !market) return [];
+    const { lowerBound, upperBound } = market.config;
+    const range = upperBound - lowerBound || 1;
+    const fan = transformHistoryToFanChart(history.snapshots, lowerBound, upperBound);
+    return fan.map(p => ({
+      ts: p.timestamp,
+      // Normalize to 0-100% of the market's range so both series share one Y axis
+      value: ((p.mean - lowerBound) / range) * 100,
+    }));
+  }, [history, market]);
+
+  return { points, loading };
+}
+
+function mergeSeries(
+  src: Array<{ ts: number; value: number }>,
+  tgt: Array<{ ts: number; value: number }>,
+) {
+  if (!src.length && !tgt.length) return [];
+
+  // Union of all timestamps, sorted
+  const allTs = Array.from(new Set([...src.map(p => p.ts), ...tgt.map(p => p.ts)])).sort((a, b) => a - b);
+
+  // LOCF interpolation helper (last observation carried forward)
+  function locf(series: Array<{ ts: number; value: number }>, ts: number): number | null {
+    if (!series.length) return null;
+    let last: number | null = null;
+    for (const p of series) {
+      if (p.ts <= ts) last = p.value;
+      else break;
+    }
+    return last;
+  }
+
+  return allTs.map(ts => ({
+    ts,
+    src: locf(src, ts),
+    tgt: locf(tgt, ts),
+  })).filter(p => p.src !== null || p.tgt !== null);
+}
+
+function DualMarketMeanChart({ srcMarketId, tgtMarketId, srcColor, tgtColor, highlighted }: DualMarketMeanChartProps) {
+  const { points: srcPts, loading: srcLoading } = useMeanSeries(srcMarketId);
+  const { points: tgtPts, loading: tgtLoading } = useMeanSeries(tgtMarketId);
+
+  const data = useMemo(() => mergeSeries(srcPts, tgtPts), [srcPts, tgtPts]);
+
+  const srcOpacity = highlighted === 'target' ? 0.18 : 1;
+  const tgtOpacity = highlighted === 'source' ? 0.18 : 1;
+  const srcWidth   = highlighted === 'source' ? 2.5 : highlighted === 'target' ? 1 : 1.8;
+  const tgtWidth   = highlighted === 'target' ? 2.5 : highlighted === 'source' ? 1 : 1.8;
+
+  const formatTs = (ts: number) => {
+    const d = new Date(ts);
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  if (srcLoading || tgtLoading) {
+    return (
+      <div className="pg-dual-chart pg-dual-chart--loading">
+        <span>Loading…</span>
+      </div>
+    );
+  }
+
+  if (!data.length) {
+    return (
+      <div className="pg-dual-chart pg-dual-chart--empty">
+        <span>No history data yet</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pg-dual-chart">
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={data} margin={{ top: 8, right: 10, left: -28, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+          <XAxis
+            dataKey="ts"
+            type="number"
+            domain={['dataMin', 'dataMax']}
+            tickFormatter={formatTs}
+            tick={{ fill: 'rgba(166,174,203,0.6)', fontSize: 9 }}
+            tickLine={false}
+            axisLine={false}
+            minTickGap={40}
+          />
+          <YAxis
+            domain={[0, 100]}
+            tick={{ fill: 'rgba(166,174,203,0.6)', fontSize: 9 }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v: number) => `${v.toFixed(0)}%`}
+          />
+          <Tooltip
+            contentStyle={{
+              background: '#0c1226',
+              border: '1px solid #232B4D',
+              borderRadius: 6,
+              fontSize: 11,
+              color: '#F2F4F8',
+            }}
+            labelFormatter={(v: number) => formatTs(v)}
+            formatter={(value: number, name: string) => [
+              `${value.toFixed(1)}%`,
+              name === 'src' ? 'Market A' : 'Market B',
+            ]}
+          />
+          <Line
+            dataKey="src"
+            stroke={srcColor}
+            strokeWidth={srcWidth}
+            strokeOpacity={srcOpacity}
+            dot={false}
+            isAnimationActive={false}
+            connectNulls
+          />
+          <Line
+            dataKey="tgt"
+            stroke={tgtColor}
+            strokeWidth={tgtWidth}
+            strokeOpacity={tgtOpacity}
+            dot={false}
+            isAnimationActive={false}
+            connectNulls
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // ─── Rail edge ────────────────────────────────────────────────────────────────
 
 const EDGE_KIND_LABELS: Record<string, { title: string; description: string }> = {
@@ -131,13 +285,18 @@ interface RailEdgeProps {
   onNodeClick: (id: string) => void;
 }
 
+const CLUSTER_NAMES = ['World Cup Core', 'Legacy / Star Power', 'Attention / Creator', 'Travel Spillover'];
+
 function RailEdge({ edge, sourceNode, targetNode, onClose, onNodeClick }: RailEdgeProps) {
   const kind = getEdgeKind(edge.source, edge.target);
   const kindInfo = EDGE_KIND_LABELS[kind];
   const srcColor = DESIGN_COLORS[sourceNode.group % 4];
   const tgtColor = DESIGN_COLORS[targetNode.group % 4];
-  const srcCluster = ['World Cup Core', 'Legacy / Star Power', 'Attention / Creator', 'Travel Spillover'][sourceNode.group] ?? '';
-  const tgtCluster = ['World Cup Core', 'Legacy / Star Power', 'Attention / Creator', 'Travel Spillover'][targetNode.group] ?? '';
+  const srcCluster = CLUSTER_NAMES[sourceNode.group] ?? '';
+  const tgtCluster = CLUSTER_NAMES[targetNode.group] ?? '';
+
+  // Which market button is being hovered — null means both equally visible
+  const [highlighted, setHighlighted] = useState<'source' | 'target' | null>(null);
 
   return (
     <>
@@ -162,6 +321,38 @@ function RailEdge({ edge, sourceNode, targetNode, onClose, onNodeClick }: RailEd
       <div className="pg-story__section">
         <div className="pg-story__section-label">Why this connection exists</div>
         <p className="pg-story__body">{edge.detail}</p>
+      </div>
+
+      {/* Dual-market chart */}
+      <div className="pg-story__section">
+        <div className="pg-story__section-label">Market signals — hover to compare</div>
+        <div className="pg-edge-chart-switcher">
+          <button
+            className={`pg-edge-chart-btn${highlighted === 'source' ? ' pg-edge-chart-btn--active' : ''}`}
+            style={{ '--btn-color': srcColor } as React.CSSProperties}
+            onMouseEnter={() => setHighlighted('source')}
+            onMouseLeave={() => setHighlighted(null)}
+          >
+            <span className="pg-edge-chart-btn__dot" style={{ background: srcColor }}/>
+            <span className="pg-edge-chart-btn__label">{sourceNode.title}</span>
+          </button>
+          <button
+            className={`pg-edge-chart-btn${highlighted === 'target' ? ' pg-edge-chart-btn--active' : ''}`}
+            style={{ '--btn-color': tgtColor } as React.CSSProperties}
+            onMouseEnter={() => setHighlighted('target')}
+            onMouseLeave={() => setHighlighted(null)}
+          >
+            <span className="pg-edge-chart-btn__dot" style={{ background: tgtColor }}/>
+            <span className="pg-edge-chart-btn__label">{targetNode.title}</span>
+          </button>
+        </div>
+        <DualMarketMeanChart
+          srcMarketId={sourceNode.marketId}
+          tgtMarketId={targetNode.marketId}
+          srcColor={srcColor}
+          tgtColor={tgtColor}
+          highlighted={highlighted}
+        />
       </div>
 
       <div className="pg-story__section">
@@ -254,6 +445,14 @@ function RailStory({
       {editorial && (
         <p className="pg-story__pull">{editorial.hoverExplanation}</p>
       )}
+
+      <div className="pg-story__chart">
+        <MarketCharts
+          marketId={focusedNode.marketId}
+          height={150}
+          views={['timeline', 'consensus']}
+        />
+      </div>
 
       {editorial && (
         <div className="pg-story__section">
