@@ -9,6 +9,10 @@ import { useForceLayout } from '../graph/useForceLayout';
 const CANVAS_W = 1000;
 const CANVAS_H = 680;
 
+// Mobile portrait canvas
+const MOBILE_CANVAS_W = 500;
+const MOBILE_CANVAS_H = 850;
+
 export const DESIGN_COLORS = ['#5468E8', '#E61D25', '#D1D4D1', '#3CAC3B'] as const;
 
 const CLUSTER_SHORTS = ['CORE', 'LEGACY', 'ATTENTION', 'TRAVEL'] as const;
@@ -18,6 +22,20 @@ const CLUSTER_REGIONS: Record<number, { x: number; y: number }> = {
   1: { x: 780, y: 230 },
   2: { x: 800, y: 540 },
   3: { x: 180, y: 560 },
+};
+
+const MOBILE_CLUSTER_REGIONS: Record<number, { x: number; y: number }> = {
+  0: { x: 210, y: 180 },
+  1: { x: 390, y: 260 },
+  2: { x: 340, y: 600 },
+  3: { x: 100, y: 480 },
+};
+
+const MOBILE_CLUSTER_SEEDS: Record<number, { x: number; y: number }> = {
+  0: { x: 210, y: 220 },
+  1: { x: 390, y: 300 },
+  2: { x: 340, y: 640 },
+  3: { x: 100, y: 500 },
 };
 
 // Keystones are larger (r=14 base) and have an inner dot
@@ -40,6 +58,29 @@ export const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
   '225': { x: 905, y: 480 },
   '231': { x: 905, y: 600 },
   '73':  { x: 220, y: 580 },
+};
+
+// Mobile portrait positions — clusters stacked vertically
+const MOBILE_NODE_POSITIONS: Record<string, { x: number; y: number }> = {
+  // Core (top)
+  '129': { x: 250, y: 200 },
+  '249': { x: 145, y: 115 },
+  '92':  { x: 100, y: 220 },
+  '247': { x: 165, y: 310 },
+  '246': { x: 300, y: 320 },
+  '248': { x: 85,  y: 390 },
+  // Legacy (middle-right)
+  '245': { x: 380, y: 190 },
+  '244': { x: 395, y: 310 },
+  '93':  { x: 370, y: 430 },
+  '34':  { x: 425, y: 120 },
+  // Attention (bottom)
+  '227': { x: 270, y: 560 },
+  '222': { x: 345, y: 650 },
+  '225': { x: 415, y: 560 },
+  '231': { x: 385, y: 740 },
+  // Travel (left-middle)
+  '73':  { x: 105, y: 540 },
 };
 
 // Short display labels (what fits on the graph)
@@ -123,31 +164,104 @@ export interface GraphSVGProps {
   strategyMode?: boolean;
   /** Edge currently selected (clicked) — stays highlighted with traveling pulse. */
   focusedEdge?: GraphEdge | null;
+  /** Portrait layout for mobile screens. */
+  isMobile?: boolean;
   onNodeClick: (id: string) => void;
   onBackgroundClick: () => void;
   onNodeHover?: (node: GraphNode | null) => void;
   onEdgeClick?: (edge: GraphEdge) => void;
 }
 
+// ─── Pan & Zoom constants ─────────────────────────────────────────────────────
+const MIN_ZOOM = 0.4;      // max zoom-out (viewBox 2.5× original)
+const MAX_ZOOM = 3.0;      // max zoom-in (viewBox 1/3 original)
+const PAN_THRESHOLD = 4;   // px movement before committing to pan
+const ZOOM_FACTOR = 1.08;  // ~8% per wheel tick
+
+type VB = { x: number; y: number; w: number; h: number };
+
+function clampViewBox(vb: VB, contentW: number, contentH: number): VB {
+  const margin = 0.3;
+  const minX = -(vb.w * (1 - margin));
+  const maxX = contentW - vb.w * margin;
+  const minY = -(vb.h * (1 - margin));
+  const maxY = contentH - vb.h * margin;
+  return {
+    x: Math.min(Math.max(vb.x, minX), maxX),
+    y: Math.min(Math.max(vb.y, minY), maxY),
+    w: vb.w,
+    h: vb.h,
+  };
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function GraphSVG({
   graphData, focusedId, filterCluster, hoveredConnId, introStage = 3,
-  selectedIds, strategyMode = false, focusedEdge,
+  selectedIds, strategyMode = false, focusedEdge, isMobile = false,
   onNodeClick, onBackgroundClick, onNodeHover, onEdgeClick,
 }: GraphSVGProps) {
   const showNodes = introStage >= 1;
   const showEdges = introStage >= 2;
 
+  // Pick canvas dimensions and seeds based on viewport
+  const cW = isMobile ? MOBILE_CANVAS_W : CANVAS_W;
+  const cH = isMobile ? MOBILE_CANVAS_H : CANVAS_H;
+  const nodePositions = isMobile ? MOBILE_NODE_POSITIONS : NODE_POSITIONS;
+  const clusterRegions = isMobile ? MOBILE_CLUSTER_REGIONS : CLUSTER_REGIONS;
+
   // ── Force layout ────────────────────────────────────────────────────────
-  const { stablePos, setOverride } = useForceLayout(graphData, NODE_POSITIONS);
+  const { stablePos, setOverride } = useForceLayout(
+    graphData, nodePositions, cW, cH,
+    isMobile ? MOBILE_CLUSTER_SEEDS : undefined,
+  );
 
   // ── Drag support ────────────────────────────────────────────────────────
   const svgRef = useRef<SVGSVGElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragMovedRef = useRef(false);
 
-  const getSvgCoords = useCallback((e: React.MouseEvent): { x: number; y: number } => {
+  // ── Centered default viewBox (fits content with padding) ──────────────
+  const defaultVB = useMemo<VB>(() => {
+    const pos = Object.values(nodePositions);
+    if (pos.length === 0) return { x: 0, y: 0, w: cW, h: cH };
+    const PAD = 90;
+    const xs = pos.map(p => p.x);
+    const ys = pos.map(p => p.y);
+    const contentCX = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const contentCY = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const w = Math.max(Math.max(...xs) - Math.min(...xs) + PAD * 2, cW);
+    const h = Math.max(Math.max(...ys) - Math.min(...ys) + PAD * 2, cH);
+    return { x: contentCX - w / 2, y: contentCY - h / 2, w, h };
+  }, [nodePositions, cW, cH]);
+
+  // ── Pan & Zoom state ──────────────────────────────────────────────────
+  const [viewBox, setViewBox] = useState<VB>(defaultVB);
+  const viewBoxRef = useRef(viewBox);
+  viewBoxRef.current = viewBox;
+  const defaultVBRef = useRef(defaultVB);
+  defaultVBRef.current = defaultVB;
+
+  const panStartRef = useRef<{ clientX: number; clientY: number; vbx: number; vby: number } | null>(null);
+  const panMovedRef = useRef(false);
+  const isPanningRef = useRef(false);
+
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartVBRef = useRef<VB | null>(null);
+  const pinchCenterRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const lastTapRef = useRef(0);
+
+  const isDefaultView = Math.abs(viewBox.x - defaultVB.x) < 1
+    && Math.abs(viewBox.y - defaultVB.y) < 1
+    && Math.abs(viewBox.w - defaultVB.w) < 1
+    && Math.abs(viewBox.h - defaultVB.h) < 1;
+
+  // Reset viewBox when canvas dimensions change (mobile ↔ desktop)
+  useEffect(() => {
+    setViewBox(defaultVB);
+  }, [defaultVB]);
+
+  const getSvgCoords = useCallback((e: React.MouseEvent | { clientX: number; clientY: number }): { x: number; y: number } => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0 };
     const pt = svg.createSVGPoint();
@@ -157,19 +271,206 @@ export function GraphSVG({
     return { x: svgP.x, y: svgP.y };
   }, []);
 
+  // ── Mouse pan & drag ──────────────────────────────────────────────────
+  // Pan starts on ANY mousedown that reaches the SVG. Nodes and edge hit
+  // areas already call stopPropagation(), so those never reach here.
+  const handleSvgMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    panStartRef.current = { clientX: e.clientX, clientY: e.clientY, vbx: viewBox.x, vby: viewBox.y };
+    panMovedRef.current = false;
+    isPanningRef.current = false;
+  }, [viewBox.x, viewBox.y]);
+
   const handleSvgMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingId) return;
-    dragMovedRef.current = true;
-    const pos = getSvgCoords(e);
-    setOverride(draggingId, {
-      x: Math.min(Math.max(pos.x, 60), CANVAS_W - 60),
-      y: Math.min(Math.max(pos.y, 60), CANVAS_H - 60),
-    });
-  }, [draggingId, getSvgCoords, setOverride]);
+    // Node drag takes priority
+    if (draggingId) {
+      dragMovedRef.current = true;
+      const pos = getSvgCoords(e);
+      setOverride(draggingId, {
+        x: Math.min(Math.max(pos.x, 60), cW - 60),
+        y: Math.min(Math.max(pos.y, 60), cH - 60),
+      });
+      return;
+    }
+    // Pan
+    if (panStartRef.current) {
+      const dx = e.clientX - panStartRef.current.clientX;
+      const dy = e.clientY - panStartRef.current.clientY;
+      if (!panMovedRef.current && Math.sqrt(dx * dx + dy * dy) < PAN_THRESHOLD) return;
+      panMovedRef.current = true;
+      isPanningRef.current = true;
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = viewBox.w / rect.width;
+      const scaleY = viewBox.h / rect.height;
+      const next: VB = {
+        x: panStartRef.current.vbx - dx * scaleX,
+        y: panStartRef.current.vby - dy * scaleY,
+        w: viewBox.w,
+        h: viewBox.h,
+      };
+      setViewBox(clampViewBox(next, cW, cH));
+    }
+  }, [draggingId, getSvgCoords, setOverride, cW, cH, viewBox.w, viewBox.h]);
 
   const handleSvgMouseUp = useCallback(() => {
     setDraggingId(null);
+    panStartRef.current = null;
+    isPanningRef.current = false;
   }, []);
+
+  // ── Wheel zoom (non-passive) ──────────────────────────────────────────
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      const vb = viewBoxRef.current;
+      const dvb = defaultVBRef.current;
+      const factor = e.deltaY > 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
+      const newW = Math.min(Math.max(vb.w * factor, dvb.w / MAX_ZOOM), dvb.w / MIN_ZOOM);
+      const newH = Math.min(Math.max(vb.h * factor, dvb.h / MAX_ZOOM), dvb.h / MIN_ZOOM);
+      // Keep point under cursor fixed
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const svgPt = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+      const next: VB = {
+        x: svgPt.x - (svgPt.x - vb.x) * (newW / vb.w),
+        y: svgPt.y - (svgPt.y - vb.y) * (newH / vb.h),
+        w: newW,
+        h: newH,
+      };
+      setViewBox(clampViewBox(next, cW, cH));
+    };
+    svg.addEventListener('wheel', handler, { passive: false });
+    return () => svg.removeEventListener('wheel', handler);
+  }, [cW, cH]);
+
+  // ── Touch: pan + pinch-to-zoom ────────────────────────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      pinchStartDistRef.current = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      pinchStartVBRef.current = { ...viewBox };
+      pinchCenterRef.current = {
+        clientX: (t1.clientX + t2.clientX) / 2,
+        clientY: (t1.clientY + t2.clientY) / 2,
+      };
+      panStartRef.current = null;
+      return;
+    }
+    if (e.touches.length === 1 && !draggingId) {
+      // Node/edge touchstarts call stopPropagation, so this only fires on
+      // empty space (halos, labels, background, gaps between nodes).
+      panStartRef.current = {
+        clientX: e.touches[0].clientX,
+        clientY: e.touches[0].clientY,
+        vbx: viewBox.x,
+        vby: viewBox.y,
+      };
+      panMovedRef.current = false;
+      isPanningRef.current = false;
+    }
+  }, [viewBox, draggingId]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    // Node drag via touch
+    if (e.touches.length === 1 && draggingId) {
+      dragMovedRef.current = true;
+      const t = e.touches[0];
+      const svg = svgRef.current;
+      if (!svg) return;
+      const pt = svg.createSVGPoint();
+      pt.x = t.clientX;
+      pt.y = t.clientY;
+      const svgP = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+      setOverride(draggingId, {
+        x: Math.min(Math.max(svgP.x, 60), cW - 60),
+        y: Math.min(Math.max(svgP.y, 60), cH - 60),
+      });
+      return;
+    }
+    // Single-finger pan
+    if (e.touches.length === 1 && panStartRef.current && !draggingId) {
+      const t = e.touches[0];
+      const dx = t.clientX - panStartRef.current.clientX;
+      const dy = t.clientY - panStartRef.current.clientY;
+      if (!panMovedRef.current && Math.sqrt(dx * dx + dy * dy) < PAN_THRESHOLD) return;
+      panMovedRef.current = true;
+      isPanningRef.current = true;
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const scaleX = viewBox.w / rect.width;
+      const scaleY = viewBox.h / rect.height;
+      const next: VB = {
+        x: panStartRef.current.vbx - dx * scaleX,
+        y: panStartRef.current.vby - dy * scaleY,
+        w: viewBox.w,
+        h: viewBox.h,
+      };
+      setViewBox(clampViewBox(next, cW, cH));
+    }
+    // Pinch-to-zoom
+    if (e.touches.length === 2 && pinchStartDistRef.current !== null) {
+      e.preventDefault();
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const ratio = pinchStartDistRef.current / dist;
+      const startVB = pinchStartVBRef.current!;
+      const newW = Math.min(Math.max(startVB.w * ratio, defaultVB.w / MAX_ZOOM), defaultVB.w / MIN_ZOOM);
+      const newH = Math.min(Math.max(startVB.h * ratio, defaultVB.h / MAX_ZOOM), defaultVB.h / MIN_ZOOM);
+      const center = pinchCenterRef.current!;
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const fx = (center.clientX - rect.left) / rect.width;
+      const fy = (center.clientY - rect.top) / rect.height;
+      const svgCenterX = startVB.x + fx * startVB.w;
+      const svgCenterY = startVB.y + fy * startVB.h;
+      const next: VB = {
+        x: svgCenterX - fx * newW,
+        y: svgCenterY - fy * newH,
+        w: newW,
+        h: newH,
+      };
+      setViewBox(clampViewBox(next, cW, cH));
+    }
+  }, [draggingId, setOverride, cW, cH, viewBox.w, viewBox.h]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length < 2) {
+      pinchStartDistRef.current = null;
+      pinchStartVBRef.current = null;
+      pinchCenterRef.current = null;
+    }
+    if (e.touches.length === 0) {
+      // Double-tap to reset
+      const target = e.target as Element;
+      const isBg = target.tagName === 'svg' || target.classList.contains('graph-bg');
+      if (isBg && !panMovedRef.current) {
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+          setViewBox(defaultVB);
+        }
+        lastTapRef.current = now;
+      }
+      panStartRef.current = null;
+      isPanningRef.current = false;
+      setDraggingId(null);
+    }
+  }, [cW, cH]);
+
+  // ── Double-click to reset (desktop) ───────────────────────────────────
+  const handleDoubleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    const target = e.target as Element;
+    if (target.tagName === 'svg' || target.classList.contains('graph-bg')) {
+      e.preventDefault();
+      setViewBox(defaultVB);
+    }
+  }, [defaultVB]);
 
   // ── Build index: adjacency + degree ─────────────────────────────────────
   const { adj, degree } = useMemo(() => {
@@ -220,8 +521,8 @@ export function GraphSVG({
     for (const n of graphData.nodes) {
       // Use force layout positions if available, else fall back to hand-placed seed
       const anchor = stablePos.size > 0
-        ? (stablePos.get(n.id) ?? NODE_POSITIONS[n.id] ?? { x: 500, y: 340 })
-        : (NODE_POSITIONS[n.id] ?? { x: 500, y: 340 });
+        ? (stablePos.get(n.id) ?? nodePositions[n.id] ?? { x: cW / 2, y: cH / 2 })
+        : (nodePositions[n.id] ?? { x: cW / 2, y: cH / 2 });
       // Suppress drift while this node is being dragged
       if (n.id === draggingId) {
         out.set(n.id, anchor);
@@ -234,12 +535,12 @@ export function GraphSVG({
       });
     }
     return out;
-  }, [graphData, tick, stablePos, draggingId]);
+  }, [graphData, tick, stablePos, draggingId, nodePositions, cW, cH]);
 
   // Cluster halo ellipses — computed from stable anchors (don't drift)
   const clusterHalos = useMemo(() => {
     if (!graphData) return [];
-    const posSource = stablePos.size > 0 ? stablePos : new Map(Object.entries(NODE_POSITIONS));
+    const posSource = stablePos.size > 0 ? stablePos : new Map(Object.entries(nodePositions));
     const groups = new Map<number, string[]>();
     for (const n of graphData.nodes) {
       if (!groups.has(n.group)) groups.set(n.group, []);
@@ -254,7 +555,7 @@ export function GraphSVG({
       const ry = Math.max(110, (Math.max(...ys) - Math.min(...ys)) / 2 + 80);
       return { g, cx, cy, rx, ry };
     });
-  }, [graphData, stablePos]);
+  }, [graphData, stablePos, nodePositions]);
 
   // Neighbors of focused node
   const focusedNeighbors = useMemo(
@@ -326,6 +627,11 @@ export function GraphSVG({
   }, [onNodeHover]);
 
   const handleSvgClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    // If user was panning, consume the click — don't deselect
+    if (panMovedRef.current) {
+      panMovedRef.current = false;
+      return;
+    }
     const target = e.target as Element;
     if (target.tagName === 'svg' || target.classList.contains('graph-bg')) {
       onBackgroundClick();
@@ -338,18 +644,23 @@ export function GraphSVG({
     <>
       <svg
         ref={svgRef}
-        className="graph-svg"
-        viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
+        className={`graph-svg${isPanningRef.current ? ' panning' : ''}`}
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
         preserveAspectRatio="xMidYMid meet"
         onClick={handleSvgClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseDown={handleSvgMouseDown}
         onMouseMove={handleSvgMouseMove}
         onMouseUp={handleSvgMouseUp}
         onMouseLeave={handleSvgMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           position: 'absolute', inset: 0,
           width: '100%', height: '100%',
           display: 'block', overflow: 'visible',
-          cursor: draggingId ? 'grabbing' : 'default',
+          cursor: draggingId ? 'grabbing' : (isPanningRef.current ? 'grabbing' : 'grab'),
         }}
       >
         <defs>
@@ -381,13 +692,13 @@ export function GraphSVG({
         </defs>
 
         {/* Background click catcher */}
-        <rect className="graph-bg" x="0" y="0" width={CANVAS_W} height={CANVAS_H} fill="transparent"/>
+        <rect className="graph-bg" x="0" y="0" width={cW} height={cH} fill="transparent"/>
 
         {/* ── Layer 1: Cluster halos + region labels ── */}
         <g>
           {clusterHalos.map(({ g, cx, cy, rx, ry }) => {
             const dim = filterCluster !== null && filterCluster !== g;
-            const region = CLUSTER_REGIONS[g] ?? { x: cx, y: cy - ry - 20 };
+            const region = clusterRegions[g] ?? { x: cx, y: cy - ry - 20 };
             return (
               <g key={g} style={{ opacity: dim ? 0.18 : 1, transition: 'opacity 0.4s' }}>
                 <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={`url(#halo-${g})`}/>
@@ -576,6 +887,8 @@ export function GraphSVG({
                     stroke="rgba(0,0,0,0)"
                     strokeWidth={16}
                     style={{ cursor: onEdgeClick ? 'pointer' : 'default', pointerEvents: 'stroke' }}
+                    onMouseDown={(ev) => ev.stopPropagation()}
+                    onTouchStart={(ev) => ev.stopPropagation()}
                     onMouseEnter={() => setLocalHoveredEdgeKey(k)}
                     onMouseLeave={() => setLocalHoveredEdgeKey(null)}
                     onClick={(ev) => {
@@ -623,6 +936,11 @@ export function GraphSVG({
                 onMouseMove={handleNodeMove}
                 onMouseLeave={handleNodeLeave}
                 onMouseDown={(e) => {
+                  e.stopPropagation();
+                  dragMovedRef.current = false;
+                  setDraggingId(n.id);
+                }}
+                onTouchStart={(e) => {
                   e.stopPropagation();
                   dragMovedRef.current = false;
                   setDraggingId(n.id);
@@ -754,6 +1072,16 @@ export function GraphSVG({
           </div>
         );
       })()}
+
+      {/* Reset-view button — only visible when panned/zoomed */}
+      {!isDefaultView && (
+        <button
+          className="pg-zoom-reset"
+          onClick={() => setViewBox(defaultVB)}
+        >
+          Reset view
+        </button>
+      )}
     </>
   );
 }
