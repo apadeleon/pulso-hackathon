@@ -2,10 +2,6 @@ import React, {
   useState, useMemo, useCallback, useEffect,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
-} from 'recharts';
 import { PasswordlessAuthWidget, MarketCharts } from '@functionspace/ui';
 import { useMarket, useMarketHistory } from '@functionspace/react';
 import { transformHistoryToFanChart } from '@functionspace/core';
@@ -208,62 +204,88 @@ function DualMarketMeanChart({ srcMarketId, tgtMarketId, srcColor, tgtColor, hig
     );
   }
 
+  const W = 380, H = 140, PL = 32, PR = 8, PT = 10, PB = 24;
+  const innerW = W - PL - PR;
+  const innerH = H - PT - PB;
+
+  const tsMin = data[0].ts;
+  const tsMax = data[data.length - 1].ts;
+  const tsRange = tsMax - tsMin || 1;
+
+  function toX(ts: number) { return PL + ((ts - tsMin) / tsRange) * innerW; }
+  function toY(v: number)  { return PT + (1 - v / 100) * innerH; }
+
+  function polyline(key: 'src' | 'tgt') {
+    const pts = data.filter(d => d[key] !== null);
+    if (!pts.length) return '';
+    return pts.map(d => `${toX(d.ts).toFixed(1)},${toY(d[key] as number).toFixed(1)}`).join(' ');
+  }
+
+  // Y-axis tick values
+  const yTicks = [0, 25, 50, 75, 100];
+
+  // X-axis ticks (up to 4 evenly spaced)
+  const xTickCount = 4;
+  const xTicks = Array.from({ length: xTickCount }, (_, i) =>
+    tsMin + (i / (xTickCount - 1)) * tsRange,
+  );
+
+  const srcPoly = polyline('src');
+  const tgtPoly = polyline('tgt');
+
   return (
     <div className="pg-dual-chart">
-      <ResponsiveContainer width="100%" height={160}>
-        <LineChart data={data} margin={{ top: 8, right: 10, left: -28, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-          <XAxis
-            dataKey="ts"
-            type="number"
-            domain={['dataMin', 'dataMax']}
-            tickFormatter={formatTs}
-            tick={{ fill: 'rgba(166,174,203,0.6)', fontSize: 9 }}
-            tickLine={false}
-            axisLine={false}
-            minTickGap={40}
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block' }}>
+        {/* Grid lines */}
+        {yTicks.map(v => (
+          <line key={v}
+            x1={PL} x2={W - PR} y1={toY(v)} y2={toY(v)}
+            stroke="rgba(255,255,255,0.05)" strokeWidth={1}
           />
-          <YAxis
-            domain={[0, 100]}
-            tick={{ fill: 'rgba(166,174,203,0.6)', fontSize: 9 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v: number) => `${v.toFixed(0)}%`}
-          />
-          <Tooltip
-            contentStyle={{
-              background: '#0c1226',
-              border: '1px solid #232B4D',
-              borderRadius: 6,
-              fontSize: 11,
-              color: '#F2F4F8',
-            }}
-            labelFormatter={(v: number) => formatTs(v)}
-            formatter={(value: number, name: string) => [
-              `${value.toFixed(1)}%`,
-              name === 'src' ? 'Market A' : 'Market B',
-            ]}
-          />
-          <Line
-            dataKey="src"
+        ))}
+
+        {/* Y axis labels */}
+        {yTicks.map(v => (
+          <text key={v}
+            x={PL - 4} y={toY(v) + 3}
+            textAnchor="end" fontSize={8} fill="rgba(166,174,203,0.5)"
+          >{v}%</text>
+        ))}
+
+        {/* X axis labels */}
+        {xTicks.map((ts, i) => (
+          <text key={i}
+            x={toX(ts)} y={H - 6}
+            textAnchor="middle" fontSize={8} fill="rgba(166,174,203,0.5)"
+          >{formatTs(ts)}</text>
+        ))}
+
+        {/* Source line */}
+        {srcPoly && (
+          <polyline
+            points={srcPoly}
+            fill="none"
             stroke={srcColor}
             strokeWidth={srcWidth}
             strokeOpacity={srcOpacity}
-            dot={false}
-            isAnimationActive={false}
-            connectNulls
+            strokeLinejoin="round"
+            strokeLinecap="round"
           />
-          <Line
-            dataKey="tgt"
+        )}
+
+        {/* Target line */}
+        {tgtPoly && (
+          <polyline
+            points={tgtPoly}
+            fill="none"
             stroke={tgtColor}
             strokeWidth={tgtWidth}
             strokeOpacity={tgtOpacity}
-            dot={false}
-            isAnimationActive={false}
-            connectNulls
+            strokeLinejoin="round"
+            strokeLinecap="round"
           />
-        </LineChart>
-      </ResponsiveContainer>
+        )}
+      </svg>
     </div>
   );
 }
@@ -307,6 +329,19 @@ function RailEdge({ edge, sourceNode, targetNode, onClose, onNodeClick }: RailEd
           <span style={{ color: 'var(--pg-text-2)' }}>Connection</span>
         </div>
         <button className="pg-story__close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+
+      {/* Connection title — the two markets */}
+      <div className="pg-edge-title">
+        <div className="pg-edge-title__market">
+          <span className="pg-edge-title__dot" style={{ background: srcColor }}/>
+          <span className="pg-edge-title__name">{sourceNode.title}</span>
+        </div>
+        <div className="pg-edge-title__arrow">↓</div>
+        <div className="pg-edge-title__market">
+          <span className="pg-edge-title__dot" style={{ background: tgtColor }}/>
+          <span className="pg-edge-title__name">{targetNode.title}</span>
+        </div>
       </div>
 
       <div className="pg-edge-kind-badge">
@@ -601,6 +636,12 @@ export function GraphHome() {
     setHoveredConnId(null);
   }, []);
 
+  // Reset rail scroll to top whenever the focused item changes
+  const railScrollRef = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    railScrollRef.current?.scrollTo({ top: 0 });
+  }, [focusedId, focusedEdge]);
+
   return (
     <div className={`pg-shell${introOpen ? ' pg-shell--intro' : ''}`}>
 
@@ -777,7 +818,7 @@ export function GraphHome() {
 
       {/* ── Rail — hidden during intro ── */}
       {!introOpen && <aside className="pg-rail">
-        <div className="pg-rail__scroll">
+        <div className="pg-rail__scroll" ref={railScrollRef}>
           {focusedEdge && (() => {
             const srcNode = graphData?.nodes.find(n => n.id === focusedEdge.source);
             const tgtNode = graphData?.nodes.find(n => n.id === focusedEdge.target);

@@ -2079,6 +2079,41 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ─── Rail edge detail ───────────────────────────────────────────────────── */
 
+.pg-edge-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 20px;
+}
+
+.pg-edge-title__market {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pg-edge-title__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pg-edge-title__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--pg-text);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.pg-edge-title__arrow {
+  font-size: 12px;
+  color: var(--pg-text-3);
+  padding-left: 16px;
+  line-height: 1;
+}
+
 .pg-edge-kind-badge {
   margin: 0 0 16px;
   padding: 12px 16px;
