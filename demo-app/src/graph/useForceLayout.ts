@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { GraphData } from './types';
 
-const CANVAS_W = 1000;
-const CANVAS_H = 680;
+const DEFAULT_CANVAS_W = 1000;
+const DEFAULT_CANVAS_H = 680;
 
 // Cluster seed centroids — same values as CLUSTER_REGIONS in GraphSVG
-const CLUSTER_SEEDS: Record<number, { x: number; y: number }> = {
+const DEFAULT_CLUSTER_SEEDS: Record<number, { x: number; y: number }> = {
   0: { x: 380, y: 290 },
   1: { x: 780, y: 230 },
   2: { x: 800, y: 540 },
@@ -27,6 +27,9 @@ export interface UseForceLayoutResult {
 export function useForceLayout(
   graphData: GraphData | null,
   initialPositions?: Record<string, Pos>,
+  canvasW: number = DEFAULT_CANVAS_W,
+  canvasH: number = DEFAULT_CANVAS_H,
+  clusterSeeds: Record<number, Pos> = DEFAULT_CLUSTER_SEEDS,
 ): UseForceLayoutResult {
   const [stablePos, setStablePos] = useState<Map<string, Pos>>(new Map());
   const overridesRef = useRef<Map<string, Pos>>(new Map());
@@ -41,7 +44,7 @@ export function useForceLayout(
     if (initialPositions) {
       nodes.forEach(n => {
         const seed = initialPositions[n.id];
-        positions.set(n.id, seed ? { ...seed } : { x: CANVAS_W / 2, y: CANVAS_H / 2 });
+        positions.set(n.id, seed ? { ...seed } : { x: canvasW / 2, y: canvasH / 2 });
       });
     } else {
       const clusterCount = new Map<number, number>();
@@ -50,7 +53,7 @@ export function useForceLayout(
       nodes.forEach(n => {
         const count = clusterCount.get(n.group) ?? 0;
         const total = clusterSizes.get(n.group) ?? 1;
-        const seed = CLUSTER_SEEDS[n.group] ?? { x: CANVAS_W / 2, y: CANVAS_H / 2 };
+        const seed = clusterSeeds[n.group] ?? { x: canvasW / 2, y: canvasH / 2 };
         const angle = (count / total) * Math.PI * 2 + n.group * 0.9;
         positions.set(n.id, {
           x: seed.x + Math.cos(angle) * 75,
@@ -64,9 +67,9 @@ export function useForceLayout(
     overridesRef.current.forEach((pos, id) => positions.set(id, { ...pos }));
 
     // ── Fruchterman-Reingold ──────────────────────────────────────────────
-    const k = Math.sqrt((CANVAS_W * CANVAS_H) / nodes.length) * 0.85;
+    const k = Math.sqrt((canvasW * canvasH) / nodes.length) * 0.85;
     const ITERATIONS = 180;
-    let temp = CANVAS_W * 0.12;
+    let temp = canvasW * 0.12;
     const cooling = (temp - 0.5) / ITERATIONS;
     const disp = new Map<string, Pos>();
     nodes.forEach(n => disp.set(n.id, { x: 0, y: 0 }));
@@ -105,7 +108,7 @@ export function useForceLayout(
 
       // Cluster gravity — gentle pull toward cluster centroid
       for (const n of nodes) {
-        const seed = CLUSTER_SEEDS[n.group];
+        const seed = clusterSeeds[n.group];
         if (!seed) continue;
         const p = positions.get(n.id)!;
         const d = disp.get(n.id)!;
@@ -125,8 +128,8 @@ export function useForceLayout(
         const dlen = Math.max(Math.sqrt(d.x * d.x + d.y * d.y), 0.01);
         const move = Math.min(dlen, temp);
         positions.set(n.id, {
-          x: Math.min(Math.max(p.x + (d.x / dlen) * move, 60), CANVAS_W - 60),
-          y: Math.min(Math.max(p.y + (d.y / dlen) * move, 60), CANVAS_H - 60),
+          x: Math.min(Math.max(p.x + (d.x / dlen) * move, 60), canvasW - 60),
+          y: Math.min(Math.max(p.y + (d.y / dlen) * move, 60), canvasH - 60),
         });
       }
 
@@ -134,7 +137,7 @@ export function useForceLayout(
     }
 
     setStablePos(new Map(positions));
-  }, [graphData]); // intentionally omitting initialPositions — only used as seed
+  }, [graphData, canvasW, canvasH]); // intentionally omitting initialPositions/clusterSeeds — only used as seed
 
   const setOverride = useCallback((id: string, pos: Pos | null) => {
     if (pos === null) {

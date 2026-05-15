@@ -555,8 +555,18 @@ export function GraphHome() {
   const [filterCluster, setFilterCluster] = useState<number | null>(null);
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
   const [strategyMode, setStrategyMode] = useState(false);
+  const [mobileView, setMobileView] = useState<'graph' | 'rail'>('graph');
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const { legs, selectedNodeIds, toggleByNode, clearCart } = useStrategy();
   const navigate = useNavigate();
+
+  // Track viewport width for mobile detection
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // Exit combine mode only when legs go from >0 to 0 (i.e. after successful execution),
   // not when entering combine mode with an empty cart.
@@ -606,7 +616,7 @@ export function GraphHome() {
   // ── Keyboard ───────────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setFocusedId(null); setFocusedEdge(null); setHoveredConnId(null); }
+      if (e.key === 'Escape') { setFocusedId(null); setFocusedEdge(null); setHoveredConnId(null); setMobileView('graph'); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -622,18 +632,21 @@ export function GraphHome() {
     setFocusedEdge(null);
     setHoveredConnId(null);
     setFocusedId(id);
+    setMobileView('rail');
   }, [strategyMode, graphData, toggleByNode]);
 
   const handleEdgeClick = useCallback((edge: GraphEdge) => {
     setFocusedId(null);
     setHoveredConnId(null);
     setFocusedEdge(edge);
+    setMobileView('rail');
   }, []);
 
   const handleBackgroundClick = useCallback(() => {
     setFocusedId(null);
     setFocusedEdge(null);
     setHoveredConnId(null);
+    setMobileView('graph');
   }, []);
 
   // Reset rail scroll to top whenever the focused item changes
@@ -643,7 +656,7 @@ export function GraphHome() {
   }, [focusedId, focusedEdge]);
 
   return (
-    <div className={`pg-shell${introOpen ? ' pg-shell--intro' : ''}`}>
+    <div className={`pg-shell${introOpen ? ' pg-shell--intro' : ''}`} data-mobile-view={mobileView}>
 
       {/* ── Masthead ── */}
       <header className="pg-masthead">
@@ -657,10 +670,12 @@ export function GraphHome() {
           </div>
         </div>
         <div className="pg-masthead__right">
-          <span className="pg-live-dot"/>
-          <span>28 days to kickoff</span>
-          <span className="pg-masthead__dot-sep">·</span>
-          <span>15 markets · 29 edges</span>
+          <span className="pg-masthead__stats">
+            <span className="pg-live-dot"/>
+            <span>28 days to kickoff</span>
+            <span className="pg-masthead__dot-sep">·</span>
+            <span>15 markets · 29 edges</span>
+          </span>
           <div className="pg-masthead__auth">
             <PasswordlessAuthWidget />
           </div>
@@ -695,6 +710,7 @@ export function GraphHome() {
             filterCluster={filterCluster}
             hoveredConnId={hoveredConnId}
             introStage={effectiveStage}
+            isMobile={isMobile}
             selectedIds={selectedNodeIds}
             strategyMode={strategyMode}
             focusedEdge={focusedEdge}
@@ -829,7 +845,7 @@ export function GraphHome() {
                   edge={focusedEdge}
                   sourceNode={srcNode}
                   targetNode={tgtNode}
-                  onClose={() => setFocusedEdge(null)}
+                  onClose={() => { setFocusedEdge(null); setMobileView('graph'); }}
                   onNodeClick={(id) => { setFocusedEdge(null); setFocusedId(id); }}
                 />
               </div>
@@ -840,7 +856,7 @@ export function GraphHome() {
               <RailStory
                 focusedNode={focusedNode}
                 focusedConnections={focusedConnections}
-                onClose={() => { setFocusedId(null); setHoveredConnId(null); }}
+                onClose={() => { setFocusedId(null); setHoveredConnId(null); setMobileView('graph'); }}
                 onConnectionClick={(id) => { setHoveredConnId(null); setFocusedId(id); }}
                 onConnectionHover={setHoveredConnId}
                 onViewDetails={(marketId) => navigate(`/market/${marketId}`)}
@@ -851,12 +867,32 @@ export function GraphHome() {
               <RailCover
                 filterCluster={filterCluster}
                 onFilterChange={setFilterCluster}
-                onStartTour={() => setFocusedId('129')}
+                onStartTour={() => { setFocusedId('129'); setMobileView('rail'); }}
               />
             </div>
           ) : null}
         </div>
       </aside>}
+
+      {/* ── Mobile tab bar ── */}
+      {!introOpen && (
+        <nav className="pg-tab-bar">
+          <button
+            className={`pg-tab-bar__tab${mobileView === 'graph' ? ' pg-tab-bar__tab--active' : ''}`}
+            onClick={() => setMobileView('graph')}
+          >
+            <svg className="pg-tab-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="10" cy="18" r="2"/><line x1="7.5" y1="7.5" x2="9" y2="16.5"/><line x1="16.5" y1="9.5" x2="11" y2="16.5"/></svg>
+            Graph
+          </button>
+          <button
+            className={`pg-tab-bar__tab${mobileView === 'rail' ? ' pg-tab-bar__tab--active' : ''}`}
+            onClick={() => setMobileView('rail')}
+          >
+            <svg className="pg-tab-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+            Stories
+          </button>
+        </nav>
+      )}
 
     </div>
   );
