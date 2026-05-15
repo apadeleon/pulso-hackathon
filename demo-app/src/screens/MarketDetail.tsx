@@ -141,7 +141,7 @@ export function MarketDetail() {
       {/* Sticky header */}
       <div className="pg-detail__header">
         <button className="pg-back-btn" onClick={() => navigate('/')}>← Graph</button>
-        <PasswordlessAuthWidget />
+        <div className="pg-masthead__auth"><PasswordlessAuthWidget /></div>
       </div>
 
       {/* Scrollable body */}
