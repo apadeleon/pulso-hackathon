@@ -1632,16 +1632,20 @@ button { font-family: inherit; cursor: pointer; }
 .pg-back-btn {
   background: none;
   border: none;
-  color: var(--pg-accent);
-  font-size: 13px;
+  color: var(--pg-text-3);
+  font-family: var(--pg-font-sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   cursor: pointer;
   padding: 4px 0;
-  font-family: var(--pg-font);
   white-space: nowrap;
   flex-shrink: 0;
+  transition: color 0.15s;
 }
 
-.pg-back-btn:hover { opacity: 0.7; }
+.pg-back-btn:hover { color: var(--pg-text); }
 
 /* ─── Editorial hero ─────────────────────────────────────────────────────── */
 .pg-hero {
