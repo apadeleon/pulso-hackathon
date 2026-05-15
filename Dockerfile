@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 RUN npm install -g pnpm@10.9.0
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY demo-app/ ./demo-app/
 RUN pnpm install --frozen-lockfile
