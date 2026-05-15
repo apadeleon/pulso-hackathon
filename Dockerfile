@@ -6,6 +6,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY demo-app/ ./demo-app/
 RUN pnpm install --frozen-lockfile
+ARG VITE_FS_BASE_URL
+ENV VITE_FS_BASE_URL=$VITE_FS_BASE_URL
 RUN cd demo-app && npx vite build
 
 FROM node:20-alpine AS runner
