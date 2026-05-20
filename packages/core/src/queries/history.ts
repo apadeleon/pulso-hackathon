@@ -26,7 +26,7 @@ export async function queryMarketHistory(
       tradeId: s.trade_id,
       side: s.side,
       positionId: String(s.position_id),
-      alphaVector: s.alpha_vector,
+      alphaVector: s.alpha_vector ?? s.state_vector,
       totalDeposits: s.total_deposited,
       totalWithdrawals: s.total_withdrawn,
       totalVolume: s.total_volume,
